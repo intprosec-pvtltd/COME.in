@@ -1,0 +1,24 @@
+<svg class="paper-traveler" viewBox="0 0 112 155" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse cx="60" cy="148" rx="38" ry="5" fill="#39243f" opacity=".11"/>
+      <g class="paper-bounce">
+      <path d="M83 107 V84 Q83 81 87 81 H92" stroke="#50384f" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <rect x="81" y="101" width="26" height="36" rx="6" fill="#D7A2A7" stroke="#563c57" stroke-width="1"/>
+      <path d="M88 106 V130 M100 106 V130" stroke="white" stroke-width="2" opacity=".5"/>
+      <circle cx="87" cy="139" r="3" fill="#362b3a"/><circle cx="101" cy="139" r="3" fill="#362b3a"/>
+      <g class="paper-leg-one"><path d="M45 102 L42 128 L35 141" stroke="#54425f" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M26 144 H43" stroke="#37283C" stroke-width="7" stroke-linecap="round"/></g>
+      <g class="paper-leg-two"><path d="M66 102 L70 128 L76 140" stroke="#3E3954" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M70 144 H88" stroke="#37283C" stroke-width="7" stroke-linecap="round"/></g>
+      <rect x="23" y="63" width="24" height="40" rx="10" fill="#D7A2A7"/>
+      <path d="M31 67 V87" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+      <path d="M39 64 Q26 80 30 98" stroke="#F1CBAE" stroke-width="9" stroke-linecap="round" fill="none"/>
+      <rect x="37" y="79" width="37" height="30" rx="9" fill="#6F4B79"/>
+      <path d="M41 57 Q54 51 68 58 L75 85 Q55 91 34 85Z" fill="#6F4B79"/>
+      <path d="M45 62 L55 72 L65 62" stroke="white" stroke-width="3" opacity=".32" fill="none"/>
+      <path d="M71 66 Q79 79 88 91" stroke="#F1CBAE" stroke-width="9" stroke-linecap="round" fill="none"/>
+      <circle cx="89" cy="92" r="5" fill="#F1CBAE"/>
+      <rect x="49" y="48" width="11" height="13" rx="4" fill="#F1CBAE"/>
+      <path d="M40 37 Q35 19 50 17 Q69 12 71 34 L63 27 L48 28Z" fill="#37283C"/>
+      <ellipse cx="55" cy="37" rx="15" ry="19" fill="#F1CBAE"/>
+      <path d="M40 34 Q40 18 54 17 Q68 17 70 33 L65 28 Q50 25 40 34" fill="#37283C"/>
+      <path d="M51 43 Q56 46 61 43" stroke="#845e60" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/>
+      </g>
+    </svg>

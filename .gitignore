@@ -1,0 +1,49 @@
+﻿.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.pem
+*.key
+*.jks
+*.keystore
+key.properties
+*.apk
+*.aab
+
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+dist/
+build/
+.dart_tool/
+.gradle/
+coverage/
+
+backend/chat_uploads/
+backend/uploads/
+backend/media/
+
+# Private resident and application uploads
+backend/private_uploads/
+**/private_uploads/
+
+# Local backup files
+*.bak
+*.backup
+*.comein-backup
+*.before_*
+*.v6_backup
+
+# Generated test reports
+docs/backend_test_results.xml
+
+# Local development artifacts
+*.iml
+.flutter-plugins-dependencies
+

@@ -1,0 +1,68 @@
+PG WHITE-LABEL PLATFORM — PHASE 1 IMPLEMENTATION
+================================================
+Base: uploaded pg_platform_mvp.zip (October 31, 2026)
+Scope: shared owner/resident Flutter app foundation, not full V2 feature rollout.
+
+EXISTING FILES UPDATED:
+  mobile/lib/main.dart
+  mobile/pubspec.yaml
+
+NEW FILES CREATED:
+  mobile/lib/core/app_theme.dart
+  mobile/lib/core/api_client.dart
+  mobile/lib/core/session_manager.dart
+  mobile/lib/auth/login_screen.dart
+  mobile/lib/auth/role_router.dart
+  mobile/lib/owner/owner_home.dart
+  mobile/lib/resident/resident_home.dart
+
+UNMODIFIED:
+  backend/main.py, backend/requirements.txt, web/ and platform-admin/
+  Your local database is NOT bundled or modified.
+
+IMPLEMENTED:
+  * One Flutter login for owner/manager and resident accounts.
+  * Role routing is based on /api/me, not a user-selectable role toggle.
+  * Access token stored using flutter_secure_storage and restored at startup.
+  * Unauthorized/expired tokens are cleared when the backend returns 401 or 403 during restore.
+  * Shared API helper with timeout, error messages, and authorization header.
+  * Separate owner dashboard with existing backend summary, residents, rent invoices,
+    submitted payments, complaints, and logout.
+  * Owner payment approve/reject requires confirmation and backend enforces role.
+  * Resident existing screens retained, with functioning homepage tile navigation.
+  * Separate login without hardcoded credentials in the UI.
+
+IMPORTANT LIMITATIONS:
+  * This is Phase 1, NOT complete Phase 2/3 dashboard redesign or Phase 4 chat.
+  * Owner dashboard summary endpoint totals all periods, not just current month.
+  * Owner room management, facility outage module, chat, proof uploads, and invoices creation
+    mobile forms are NOT yet implemented.
+  * Staff role has no mobile dashboard at this phase.
+  * Backend JWT lifetime currently 8 hours: after expiry, user must log in again.
+  * This patch has NOT been validated with Flutter's compiler in this environment.
+    Run flutter analyze/build locally and report compile errors if any.
+
+INSTALL (PowerShell; stop any running Flutter session first):
+  1. Back up C:\PG-Platform\pg_platform_mvp\mobile\lib and pubspec.yaml.
+  2. Extract the patch ZIP to C:\PG-Platform\pg_platform_mvp\
+     and allow overwriting existing mobile/lib/main.dart, mobile/pubspec.yaml.
+     The ZIP contains mobile/... paths; do not extract into mobile/ directly.
+  3. Run:
+       cd "C:\PG-Platform\pg_platform_mvp\mobile"
+       flutter pub get
+       flutter analyze
+  4. Since your machine previously had only 1 GB free RAM and less than 5 GB disk,
+     close emulator before building APK:
+       flutter build apk --debug --dart-define=API_URL=http://10.0.2.2:8000
+  5. Keep backend running and launch emulator; install built APK:
+       $env:Path += ";$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+       adb devices
+       adb -s emulator-5554 install -r ".\build\app\outputs\flutter-apk\app-debug.apk"
+  6. Open app in emulator; owner@demo.pg and resident@demo.pg use Demo123! ONLY
+     if these demo accounts exist in your local database.
+
+BACKEND:
+  cd "C:\PG-Platform\pg_platform_mvp\backend"
+  & ".\.venv\Scripts\python.exe" -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Do NOT delete your local backend database or your .env.

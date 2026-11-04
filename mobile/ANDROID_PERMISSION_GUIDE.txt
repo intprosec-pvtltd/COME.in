@@ -1,0 +1,18 @@
+COME.in Android permission checklist for existing generated Flutter Android project
+
+In mobile/android/app/src/main/AndroidManifest.xml, within <manifest> (not <application>) add:
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.CAMERA" />
+
+For local HTTP emulator debug only, in <application> add:
+android:usesCleartextTraffic="true"
+Do not enable cleartext traffic for the production release. Use HTTPS there.
+
+image_picker requests runtime camera/media access using Android platform mechanisms;
+prefer Android photo picker and request access only when users tap Camera/Photos.
+
+True background push notifications are NOT implemented by this package.
+To implement them properly: Firebase Cloud Messaging (FCM) or another push provider,
+POST_NOTIFICATIONS manifest/runtime permission on Android 13+, scoped push tokens,
+notification preferences, and server-side event dispatch for messages/outages/notices.
+The included notification feed is foreground/in-app, refresh by opening/pull-to-refresh.

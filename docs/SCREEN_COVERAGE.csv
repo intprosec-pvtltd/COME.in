@@ -1,0 +1,26 @@
+Original HTML destination,Page,Roles,Flutter file (under mobile/lib),Widgets,Integration,Status
+onboard,Onboarding (3 pages),Both,features/auth/auth_screens.dart,WelcomeScreen,SharedPreferences,Implemented; native rendering/build not executed
+login,Sign in,Both,features/auth/auth_screens.dart,SignInScreen,POST /api/login; GET /api/v3/state,Implemented; native rendering/build not executed
+signup,Create account,Both,features/auth/auth_screens.dart,RegistrationScreen,POST /api/v3/register,Implemented; native rendering/build not executed
+home,Dashboard,Both,features/dashboard/dashboard.dart,Dashboard,GET /api/v3/state,Implemented; native rendering/build not executed
+tools,Manage / Explore,Both,features/dashboard/dashboard.dart,FeatureMenu,Role-scoped state,Implemented; native rendering/build not executed
+properties,Property directory,Owner,features/management/management.dart,PropertiesPage / PropertyDetailPage,/api/v3/entities/property,Implemented; native rendering/build not executed
+rooms,Rooms and beds,Owner,features/management/management.dart,RoomsPage / RoomDetailPage / AllocationPage,/api/v3/entities/room; /resident,Implemented; native rendering/build not executed
+residents,Resident directory,Owner,features/management/management.dart,ResidentsPage,/api/v3/entities/resident,Implemented; native rendering/build not executed
+residentDetail,Resident details,Owner,features/management/management.dart,ResidentDetailPage,/api/v3/entities/resident; /reminders/{id},Implemented; native rendering/build not executed
+dues,Rent and dues,Owner,features/finance/finance.dart,RentPage / InvoiceFormPage,GET state; POST /api/invoices,Implemented; native rendering/build not executed
+rent,My rent,Resident,features/finance/finance.dart,RentPage / SubmitPaymentPage,/api/v3/payments; /api/v3/files/payment,Implemented; native rendering/build not executed
+payments,Payment verification,Owner,features/finance/finance.dart,PaymentsPage / PaymentDetailPage / ReceiptPage,/api/v3/payments/{id}/review; /api/receipts/{id},Implemented; native rendering/build not executed
+reports,Reports and analytics,Owner,features/finance/finance.dart,ReportsPage,Recorded state aggregates; native CSV save,Implemented; native rendering/build not executed
+analytics,Analytics entry,Owner,features/finance/finance.dart,ReportsPage,Alias preserved,Implemented; native rendering/build not executed
+expenses,Expense ledger,Owner,features/finance/finance.dart,ExpensesPage,/api/v3/entities/expense,Implemented; native rendering/build not executed
+staff,Staff directory,Owner,features/management/management.dart,StaffPage / StaffDetailPage,/api/v3/entities/staff,Implemented; native rendering/build not executed
+booking,Booking and allocation,Owner,features/management/management.dart,BookingsPage,/api/v3/entities/booking,Implemented; native rendering/build not executed
+complaints,Maintenance and complaints,Both,features/operations/operations.dart,ComplaintsPage / NewComplaintPage / ComplaintDetailPage,/api/v3/entities/complaint; /complaints/{id},Implemented; native rendering/build not executed
+facilities,Facility updates,Both,features/operations/operations.dart,FacilitiesPage,/api/v3/entities/facility,Implemented; native rendering/build not executed
+announcements,Announcements,Both,features/operations/operations.dart,AnnouncementsPage / NoticeDetailPage,/api/v3/entities/notice; /read/notice/{id},Implemented; native rendering/build not executed
+meals,Food menu,Both,features/operations/operations.dart,MealsPage,/api/v3/entities/meal,Implemented; native rendering/build not executed
+community,Community chat,Both,features/community/chat.dart,ChatPage / GroupInfoPage / PrivateChatAttachment,/api/v3/messages; /api/community/attachments,Implemented; native rendering/build not executed
+account,Account and preferences,Both,features/account/account.dart,AccountPage and preference/profile/password pages,/api/v3/profile; /password; /logout,Implemented; native rendering/build not executed
+notifications,Notification center,Both,features/operations/operations.dart,NotificationsPage,GET state; POST /api/v3/read/alert/{id},Implemented; native rendering/build not executed
+appearance,Appearance,Both,features/account/account.dart,AppearancePage,PATCH /api/v3/profile,Implemented; native rendering/build not executed

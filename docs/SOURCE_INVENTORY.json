@@ -1,0 +1,390 @@
+{
+  "active_dart_files": 16,
+  "source_screen_mappings": 25,
+  "widgets_and_support_classes": [
+    {
+      "class": "FakeApi",
+      "file": "mobile/test/widget_test.dart"
+    },
+    {
+      "class": "PGApp",
+      "file": "mobile/lib/main.dart"
+    },
+    {
+      "class": "_PGAppState",
+      "file": "mobile/lib/main.dart"
+    },
+    {
+      "class": "ApiException",
+      "file": "mobile/lib/core/api_client.dart"
+    },
+    {
+      "class": "ApiClient",
+      "file": "mobile/lib/core/api_client.dart"
+    },
+    {
+      "class": "SessionManager",
+      "file": "mobile/lib/core/session_manager.dart"
+    },
+    {
+      "class": "OfficialBrand",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "Attribution",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "PageBody",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "Surface",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "SectionTitle",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "StatusPill",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "HeroCard",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "FeatureTile",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "EmptyState",
+      "file": "mobile/lib/core/design.dart"
+    },
+    {
+      "class": "AppController",
+      "file": "mobile/lib/app/controller.dart"
+    },
+    {
+      "class": "AppScope",
+      "file": "mobile/lib/app/controller.dart"
+    },
+    {
+      "class": "AppShell",
+      "file": "mobile/lib/app/router.dart"
+    },
+    {
+      "class": "_AppShellState",
+      "file": "mobile/lib/app/router.dart"
+    },
+    {
+      "class": "RentPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_RentPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "InvoiceFormPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_InvoiceFormPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "SubmitPaymentPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_SubmitPaymentPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "PaymentsPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "PaymentDetailPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_PaymentDetailPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "ReceiptPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_ReceiptPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "ExpensesPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "ReportsPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_ReportsPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "PaymentMethodsPage",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "_PaymentMethodsPageState",
+      "file": "mobile/lib/features/finance/finance.dart"
+    },
+    {
+      "class": "AccountPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "ProfileEditorPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "_ProfileEditorPageState",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "PasswordPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "_PasswordPageState",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "AppearancePage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "NotificationPreferencesPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "AccommodationPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "JoiningCodePage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "_JoiningCodePageState",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "HelpPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "LegalPage",
+      "file": "mobile/lib/features/account/account.dart"
+    },
+    {
+      "class": "PropertiesPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "PropertyDetailPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "RoomsPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "_RoomsPageState",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "RoomDetailPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "AllocationPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "_AllocationPageState",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "ResidentsPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "_ResidentsPageState",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "ResidentDetailPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "StaffPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "StaffDetailPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "BookingsPage",
+      "file": "mobile/lib/features/management/management.dart"
+    },
+    {
+      "class": "FieldSpec",
+      "file": "mobile/lib/features/management/entity_form.dart"
+    },
+    {
+      "class": "EntityForm",
+      "file": "mobile/lib/features/management/entity_form.dart"
+    },
+    {
+      "class": "_EntityFormState",
+      "file": "mobile/lib/features/management/entity_form.dart"
+    },
+    {
+      "class": "Dashboard",
+      "file": "mobile/lib/features/dashboard/dashboard.dart"
+    },
+    {
+      "class": "FeatureMenu",
+      "file": "mobile/lib/features/dashboard/dashboard.dart"
+    },
+    {
+      "class": "ComplaintsPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_ComplaintsPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "NewComplaintPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_NewComplaintPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "ComplaintDetailPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_ComplaintDetailPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "FacilitiesPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_FacilitiesPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "AnnouncementsPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_AnnouncementsPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "NoticeDetailPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "_NoticeDetailPageState",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "MealsPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "NotificationsPage",
+      "file": "mobile/lib/features/operations/operations.dart"
+    },
+    {
+      "class": "ChatPage",
+      "file": "mobile/lib/features/community/chat.dart"
+    },
+    {
+      "class": "_ChatPageState",
+      "file": "mobile/lib/features/community/chat.dart"
+    },
+    {
+      "class": "PrivateChatAttachment",
+      "file": "mobile/lib/features/community/chat.dart"
+    },
+    {
+      "class": "_PrivateChatAttachmentState",
+      "file": "mobile/lib/features/community/chat.dart"
+    },
+    {
+      "class": "GroupInfoPage",
+      "file": "mobile/lib/features/community/chat.dart"
+    },
+    {
+      "class": "WelcomeScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "_WelcomeScreenState",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "SignInScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "_SignInScreenState",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "RegistrationScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "_RegistrationScreenState",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "RecoveryScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "_RecoveryScreenState",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "DoorwayIllustration",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "SplashScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "ResetPasswordScreen",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    },
+    {
+      "class": "_ResetPasswordScreenState",
+      "file": "mobile/lib/features/auth/auth_screens.dart"
+    }
+  ]
+}

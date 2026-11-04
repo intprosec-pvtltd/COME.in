@@ -1,0 +1,399 @@
+{
+  "product": "COME.in",
+  "version": "0.3.0+3",
+  "source_base": "pg_platform_mvp(1).zip",
+  "design": "COMEin_Complete_Branded_Design.html",
+  "active_dart_files": 16,
+  "original_html_destinations_covered": 25,
+  "backend_tests_passed": 21,
+  "flutter_analyze": "not executed",
+  "flutter_build": "not executed",
+  "native_platforms": "Generated when missing by scripts/Initialize-Mobile.ps1; existing platform folders retained",
+  "files": [
+    {
+      "path": "COMEIN_APPROVED_INTERACTIVE_UIUX_REFERENCE.html",
+      "bytes": 2707750,
+      "sha256": "c1dddde2e735f10282ef38aea75e17c2b0b5978a277652caab0dd5dd94d4b511"
+    },
+    {
+      "path": "README.md",
+      "bytes": 330,
+      "sha256": "8f10f13a8e4d14244807a5578718e63134d6cf2906afbae2d98ac74294596908"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 7547,
+      "sha256": "ce76bceef02cfa7aa42e28b20531ef36995db2d51c1ba6fdf651279afa549cb8"
+    },
+    {
+      "path": "backend/.env.example",
+      "bytes": 295,
+      "sha256": "26f78c1ef9ca01ace1a96944586e5486706b73e4cc84d64cf3ae6d6b59d710a1"
+    },
+    {
+      "path": "backend/main.py",
+      "bytes": 15137,
+      "sha256": "651667143ce8d34d9b1e44153b4942f3b6a21873624678fabb62df329514c4c6"
+    },
+    {
+      "path": "backend/migrate_v3.py",
+      "bytes": 1707,
+      "sha256": "e08d10afdf20e2976d55e2b7a0079415066f29c8042512509f28f2743123b881"
+    },
+    {
+      "path": "backend/requirements-dev.txt",
+      "bytes": 49,
+      "sha256": "c23feb58b6f9cab899b3e457b6cad56158f5315b366cd0f7a210feef72af395b"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "bytes": 191,
+      "sha256": "8b686038ad91b423a79af74d81d23611acf245cbb7bb1249ef5a701b6a1a582b"
+    },
+    {
+      "path": "backend/tests/test_v3.py",
+      "bytes": 12489,
+      "sha256": "7689c6b0dddbac3ffc01581612b6c30f410a6c435e64a235d0337f5e3840303c"
+    },
+    {
+      "path": "backend/v2_api.py",
+      "bytes": 19413,
+      "sha256": "53c53a5b68186a036e3625b83da735fd6d532dd19cf22fadedf12c87ae34df65"
+    },
+    {
+      "path": "backend/v3_api.py",
+      "bytes": 34443,
+      "sha256": "cf0dc93c2a306a6264f9efd888401ba00a2c56b4253eeb5528fca86df2b74c57"
+    },
+    {
+      "path": "docs/MANUAL_ACCEPTANCE.md",
+      "bytes": 2968,
+      "sha256": "c98a43b7b75be8983896a8c9cfc50fa464eebe7833f6e8777e6d6f5328931978"
+    },
+    {
+      "path": "docs/MIGRATION_AND_ROLLBACK.md",
+      "bytes": 1870,
+      "sha256": "d2667fed593a38e47de801d551cd2a8c7da838192d50f7f236ba1181eb925e71"
+    },
+    {
+      "path": "docs/SCREEN_COVERAGE.csv",
+      "bytes": 4330,
+      "sha256": "99254998688e39011232a065b8e8cfc6f62a18a4974be64a647fca03ee9e5d24"
+    },
+    {
+      "path": "docs/SOURCE_INVENTORY.json",
+      "bytes": 10053,
+      "sha256": "bdc95555176238f9f6816cc807bf5b76e374886bdb0389041df3eeb41759e894"
+    },
+    {
+      "path": "docs/TESTED_PYTHON_VERSIONS.txt",
+      "bytes": 296,
+      "sha256": "bc80a6b59948ade26351a5f62781aa1b3a07e2925ad3071ab48787923d8ead31"
+    },
+    {
+      "path": "docs/TESTING_REPORT.md",
+      "bytes": 3269,
+      "sha256": "8cfb78955c2652d7230b752fe155ce355460be18afe24d6d16ceaf06118a49ba"
+    },
+    {
+      "path": "docs/backend_test_results.xml",
+      "bytes": 2736,
+      "sha256": "59ac5567db003d1a0ea04d07e26646b14d39e37a6d8d3b5d29ed5a816e69f68f"
+    },
+    {
+      "path": "legacy/COMEIN_DEVELOPMENT_HANDOFF.md",
+      "bytes": 5748,
+      "sha256": "bc5fa4103a0cfea0b001fb38743327a52b450284b9be6393fcf90659dd3e1ac9"
+    },
+    {
+      "path": "legacy/COMEIN_DEVELOPMENT_STATUS_V2_2.md",
+      "bytes": 3169,
+      "sha256": "cfd09d5aa5a4ed005351d249f62739801d4d976ccee876dc2823d79709d9229e"
+    },
+    {
+      "path": "legacy/COMEIN_RELEASE_MANIFEST.json",
+      "bytes": 211,
+      "sha256": "079036ab560f0cdcaf9c27ca0bc9b13c67446fb660826b3f435a2fa729bc83a1"
+    },
+    {
+      "path": "legacy/PHASE1_INSTALL_AND_STATUS.txt",
+      "bytes": 3326,
+      "sha256": "7552680a246326c8347bcfd91b112e0416596e51172259ae48a6d03f6d0765bc"
+    },
+    {
+      "path": "legacy/PHASES_2_TO_6_README.md",
+      "bytes": 6320,
+      "sha256": "0ae6bb50c0d5e24ce1ed7707c07436e8d22f4356bd347021356560ac3d2979f1"
+    },
+    {
+      "path": "legacy/README.md",
+      "bytes": 3194,
+      "sha256": "0594cdaf6cd3b5e6e0a7ce601603c214ee1ccafaf3a23c492ace552d022538a1"
+    },
+    {
+      "path": "legacy/mobile_lib/auth/login_screen.dart",
+      "bytes": 3373,
+      "sha256": "63ce6292beaa026257d66f30e98cd29ccaad530cbf9c8a3b9c3a48f6dcf6d147"
+    },
+    {
+      "path": "legacy/mobile_lib/auth/onboarding_screen.dart",
+      "bytes": 6170,
+      "sha256": "5a89601b25613854e5b6e0cf1a9f5310185c2f2b6c0bc3ed12c151059722a2f0"
+    },
+    {
+      "path": "legacy/mobile_lib/auth/role_router.dart",
+      "bytes": 1114,
+      "sha256": "cbd94a8d9072941bc6923aa4b1bb9f16adf5964dad5ff8eb03001bb8e0b84e0c"
+    },
+    {
+      "path": "legacy/mobile_lib/comein_widgets.dart",
+      "bytes": 4469,
+      "sha256": "1697c62c5a73cf9148c17adc72bd07819731828ed35ee04db770aa9f027b362d"
+    },
+    {
+      "path": "legacy/mobile_lib/community/community_screen.dart",
+      "bytes": 10289,
+      "sha256": "d491d38cc49e5f408c174d2219c85e5834ccf25f8073de0764a1f2eea943ac97"
+    },
+    {
+      "path": "legacy/mobile_lib/india_time.dart",
+      "bytes": 630,
+      "sha256": "d738438110cf1e26023cc1818bedb76794363ac21afa9b6c128a53db79683762"
+    },
+    {
+      "path": "legacy/mobile_lib/owner/owner_home.dart",
+      "bytes": 7546,
+      "sha256": "1c9744162b57cc3cf0ccf2451afaf7e98ab446743f2fc974100b5abb893b4b2b"
+    },
+    {
+      "path": "legacy/mobile_lib/owner/owner_v2.dart",
+      "bytes": 13954,
+      "sha256": "62c7ec878f16637b770c6fabc6d404391cf3afc49f3a38a450c562456fc93d92"
+    },
+    {
+      "path": "legacy/mobile_lib/owner/reports_screen.dart",
+      "bytes": 5701,
+      "sha256": "4d95d3ba6ed63eaa4925ea4e46e7beca940e66a2c7e5794354d4d7350caa890b"
+    },
+    {
+      "path": "legacy/mobile_lib/resident/resident_home.dart",
+      "bytes": 8550,
+      "sha256": "6646ba371859e1a8f51c76837b14fd676a26277b089066ae38009673528023ae"
+    },
+    {
+      "path": "legacy/mobile_lib/resident/resident_v2.dart",
+      "bytes": 8313,
+      "sha256": "7a775d61e44c9d3db54f0924450ba1fd354732a6b7b79e87aa06d70bebc5adf9"
+    },
+    {
+      "path": "legacy/mobile_lib/shared/notification_screen.dart",
+      "bytes": 2467,
+      "sha256": "9934b2bc78cdbc8995361ff71406a0c4685fa6856d602e96fc4df4f4a3777a62"
+    },
+    {
+      "path": "legacy/mobile_lib/v2_ui.dart",
+      "bytes": 4260,
+      "sha256": "f895f7390adde418322b70379da8aa9bc5b3b8099db92d8594f1684445da9068"
+    },
+    {
+      "path": "mobile/ANDROID_PERMISSION_GUIDE.txt",
+      "bytes": 1061,
+      "sha256": "ffa6918781c2a5fc2175b4febd049ff5cfc22e223e4759a26be68ee24ee38b08"
+    },
+    {
+      "path": "mobile/assets/brand/icon.png",
+      "bytes": 1468162,
+      "sha256": "76a96802473a667a9fc1d552d50fe84a0f21d706461f18cdfdde99f477e27fc8"
+    },
+    {
+      "path": "mobile/assets/brand/logo.png",
+      "bytes": 447551,
+      "sha256": "8d240fc3857ff82e017c0b729a4f4786b196b212c638b00a80c8bb916626dc45"
+    },
+    {
+      "path": "mobile/assets/onboarding/scene1.svg",
+      "bytes": 9876,
+      "sha256": "59f353a9b08367234cebcde5457af7cb7255e254972af39b71c5a3fd520f7588"
+    },
+    {
+      "path": "mobile/assets/onboarding/scene2.svg",
+      "bytes": 1306,
+      "sha256": "195aef3fd1b09ad78164784272520e518bec069d662c7e4abdf9564fbec2b3d9"
+    },
+    {
+      "path": "mobile/assets/onboarding/scene3.svg",
+      "bytes": 1240,
+      "sha256": "0f4851f78b15f946d7810655075f11f306626b463f736e0c16454f672d8797c1"
+    },
+    {
+      "path": "mobile/assets/onboarding/traveler1.svg",
+      "bytes": 2202,
+      "sha256": "af897e34758c64d0292042c5aae18dd2256263cc99b2b26e3bfa2f6026a3b6bd"
+    },
+    {
+      "path": "mobile/assets/onboarding/traveler2.svg",
+      "bytes": 2207,
+      "sha256": "560a74fa54606dc983c1f84bacf1ef73b95cffacca47e3fd9cd73b93391c664c"
+    },
+    {
+      "path": "mobile/lib/app/controller.dart",
+      "bytes": 4301,
+      "sha256": "800bc6345970112ef0bd500ca58d90b9cb98ad20eb16a65435c08b04244d4b56"
+    },
+    {
+      "path": "mobile/lib/app/router.dart",
+      "bytes": 5233,
+      "sha256": "f4846852f56c9408a47d76ff11d9c592fafb63688d3df2c3a6bf2182bebb62d5"
+    },
+    {
+      "path": "mobile/lib/core/api_client.dart",
+      "bytes": 3376,
+      "sha256": "ec8aa97133823f527c2869ad04ea9b19e93f85800655ea1f864227ea1b4e0eda"
+    },
+    {
+      "path": "mobile/lib/core/app_theme.dart",
+      "bytes": 2072,
+      "sha256": "332e27482750372c4056a241b370ac618ea669f5ebd82b9359d0782fb0fea829"
+    },
+    {
+      "path": "mobile/lib/core/design.dart",
+      "bytes": 9575,
+      "sha256": "090680c5787799009e3f4d86b5cb6f75627f150c16e08f933866f7547262f7f7"
+    },
+    {
+      "path": "mobile/lib/core/session_manager.dart",
+      "bytes": 406,
+      "sha256": "d41d28d35b1342f2f61d670b4333be5a2fba6e59b337fe58ed6806c916ba710d"
+    },
+    {
+      "path": "mobile/lib/features/account/account.dart",
+      "bytes": 13139,
+      "sha256": "b49aa5baec578deecb6765489ec3bb1d8d1cbd3987d6859632b696eb2b7b82b4"
+    },
+    {
+      "path": "mobile/lib/features/auth/auth_screens.dart",
+      "bytes": 15072,
+      "sha256": "ed9542860e1345787fd93a01af41bb2f4d51525a2212e614821f8eac88e93293"
+    },
+    {
+      "path": "mobile/lib/features/community/chat.dart",
+      "bytes": 17020,
+      "sha256": "378a6e9e445c78fa742bd1f25c741509238cef29faec5b91badae4200aeab881"
+    },
+    {
+      "path": "mobile/lib/features/dashboard/dashboard.dart",
+      "bytes": 9364,
+      "sha256": "5bdb86f739de9841a9e54156efe5006b5271eef59743a9f48f0cc0a8192a4190"
+    },
+    {
+      "path": "mobile/lib/features/finance/finance.dart",
+      "bytes": 27664,
+      "sha256": "b9229e943b8ea0c5826236394be9aad6fca471735ee03b534e86b8726948967d"
+    },
+    {
+      "path": "mobile/lib/features/management/entity_form.dart",
+      "bytes": 8181,
+      "sha256": "91223f301e34cbf7414e4de028eb9902541f700869c29ccb2097a21cefc74ccd"
+    },
+    {
+      "path": "mobile/lib/features/management/management.dart",
+      "bytes": 17531,
+      "sha256": "2bb34bce682a214841d3153f2a5c7353d625196ba023810ad5543bf895ffcbef"
+    },
+    {
+      "path": "mobile/lib/features/operations/operations.dart",
+      "bytes": 18806,
+      "sha256": "8ba023063c9d0265484133e7bf1d8931438ce8a36fe80427fd923cbda2c8e721"
+    },
+    {
+      "path": "mobile/lib/main.dart",
+      "bytes": 1503,
+      "sha256": "6d1295bc6074701d76c982149eaf5dfd38cfea7dd0e845236d6e49ef9f80f7ce"
+    },
+    {
+      "path": "mobile/pubspec.yaml",
+      "bytes": 736,
+      "sha256": "87a7dc4923ffb184a64b117b6d675a9656b7e760bd69565425fb796f7020f3d8"
+    },
+    {
+      "path": "mobile/test/widget_test.dart",
+      "bytes": 4309,
+      "sha256": "5d854558c434b30a6ec61fc472b7fbfa803b5cc2c9d95ca2e89af390f2350b61"
+    },
+    {
+      "path": "platform-admin/index.html",
+      "bytes": 225,
+      "sha256": "76663555cbce33476fe2b3fe0d122d823d7d2c5c81dced435e10453bda6fea02"
+    },
+    {
+      "path": "platform-admin/package.json",
+      "bytes": 273,
+      "sha256": "37e6251c8256efd80954228609cf92a335a7228fbcc98c9f0e54714f59c59926"
+    },
+    {
+      "path": "platform-admin/src/main.jsx",
+      "bytes": 2029,
+      "sha256": "5503ad4afc3f83aa440f284bb73339f8683fe59fc5191bc59fcd8574dca70fb2"
+    },
+    {
+      "path": "platform-admin/src/style.css",
+      "bytes": 1187,
+      "sha256": "73f25e34063f50fad8f41c6c1b6f5a93f6c8234a18cc1009ee37fd7035d01379"
+    },
+    {
+      "path": "scripts/Configure-Native.ps1",
+      "bytes": 2352,
+      "sha256": "f02b76d5cc5fb51558467ed7ed7b0aac8834886a598ff905b5147b20aa228964"
+    },
+    {
+      "path": "scripts/Initialize-Mobile.ps1",
+      "bytes": 1379,
+      "sha256": "c5a8e75e337605ecb5fcfe31b3dfca900ad6c6b5278ee20804933d7197e45e89"
+    },
+    {
+      "path": "scripts/Install-Update.ps1",
+      "bytes": 1892,
+      "sha256": "7feb2ad505e00bbe984a5f5fc3d8919f22a132387210d69fabef32ceee18b307"
+    },
+    {
+      "path": "scripts/Run-Backend.ps1",
+      "bytes": 1265,
+      "sha256": "36781478cb410196d8ed4f61dc7f5ec6d6127d959614054c276653b1bc8f31db"
+    },
+    {
+      "path": "scripts/Run-Mobile.ps1",
+      "bytes": 439,
+      "sha256": "53a72db8d05dac7d36597801c53c27a661b5f1ad7a6a1161cee75341850e6edc"
+    },
+    {
+      "path": "scripts/Test-All.ps1",
+      "bytes": 965,
+      "sha256": "627bc251c7a60c652f22ea29abc5afb6490585a4526443045272881aa9a0defc"
+    },
+    {
+      "path": "web/.env.example",
+      "bytes": 35,
+      "sha256": "eaa8503379c11ade6ef8d7b77ef64e8d9772ce183cc7704ebc42a58b2f358693"
+    },
+    {
+      "path": "web/index.html",
+      "bytes": 250,
+      "sha256": "11c5a7462179bd9e2869d5655025f5c2931fbadef67436a464d8fdc89f68aa79"
+    },
+    {
+      "path": "web/package.json",
+      "bytes": 256,
+      "sha256": "bd0c8042d719c71f1ad228d7395d57b134827e4850c03f250c4417eb84cfc40f"
+    },
+    {
+      "path": "web/src/main.jsx",
+      "bytes": 8532,
+      "sha256": "ce5481f5ae1dcc38931c0ba95a975bd5f384ce68753235f1c9873272cdd3e702"
+    },
+    {
+      "path": "web/src/style.css",
+      "bytes": 3170,
+      "sha256": "733e22ef544438fad01d91ed305af5ba8de57a5c52f93a2004324b0c98e85cf6"
+    }
+  ]
+}

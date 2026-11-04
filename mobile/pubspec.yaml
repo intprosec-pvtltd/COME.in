@@ -1,0 +1,36 @@
+name: pg_resident
+publish_to: none
+description: COME.in owner, resident and maintenance mobile application
+version: 0.3.0+3
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.17
+  shared_preferences: ^2.3.5
+  http: ^1.3.0
+  flutter_secure_storage: ^9.2.4
+  image_picker: ^1.1.2
+  share_plus: ^10.1.4
+  file_picker: ^8.3.7
+  intl: ^0.20.2
+  http_parser: ^4.1.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brand/
+    - assets/auth/
+    - assets/onboarding/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/brand/icon.png
+  remove_alpha_ios: true
+  background_color_ios: "#3B1E3F"
