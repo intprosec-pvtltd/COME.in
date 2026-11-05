@@ -146,22 +146,18 @@ class SignInScreen extends StatefulWidget {
       // The keyboard reduces limits.maxHeight. Never use Expanded/Flexible in
       // the scrolling auth content: it caused the 317px overflow on Android.
       return Column(mainAxisSize:MainAxisSize.min,children:[
-        // Keep the illustration and full welcome section on the normal screen.
-        // When the keyboard is open, prioritize the credential fields so they
-        // remain visible above the IME instead of overlapping the hero artwork.
-        if (!keyboardOpen) ...[
-          const SizedBox(height:5),
-          const _AuthBrand(),
-          const SizedBox(height:16),
-          const Text('Welcome back!',style:TextStyle(fontSize:32,fontWeight:FontWeight.w900,color:plum)),
-          const SizedBox(height:2),
-          const Text('Same spaces. Brighter days.',style:TextStyle(fontSize:14,color:Color(0xFF84718B))),
-          const SizedBox(height:12),
-        ] else ...[
-          const SizedBox(height:4),
-          const Text('Sign in to COME.in',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:plum)),
-          const SizedBox(height:12),
-        ],
+        // Keep the same brand, welcome heading and fields with or without the
+        // keyboard, just as on owner registration. The shared scroll viewport
+        // handles reduced keyboard space instead of swapping the whole header.
+        const SizedBox(height: 5),
+        const _AuthBrand(),
+        const SizedBox(height: 16),
+        const Text('Welcome back!', textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: plum)),
+        const SizedBox(height: 2),
+        const Text('Same spaces. Brighter days.', textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: Color(0xFF84718B))),
+        const SizedBox(height: 12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
           _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
             autofillHints:const [AutofillHints.username],
@@ -191,12 +187,10 @@ class SignInScreen extends StatefulWidget {
         const SizedBox(height:3),
         TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RegistrationScreen())),
           child:const Text('Create account',style:TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
-        // Hide decorative content while typing; the form then scrolls naturally
-        // inside the keyboard-reduced viewport without bottom overflow.
-        if(!keyboardOpen) ...[
-          const _AuthSocialInfo(),
-          const _AuthWhiteFooter(),
-        ],
+        // Keep the original footer in the scroll content. It can be reached
+        // by scrolling while the keyboard is open, without obscuring fields.
+        const _AuthSocialInfo(),
+        const _AuthWhiteFooter(),
       ]);
     });
 } class RegistrationScreen extends StatefulWidget {
@@ -328,7 +322,7 @@ class SignInScreen extends StatefulWidget {
           if(mounted)setState(()=>busy=false);
         }
       },
-      child:Text(busy?'Requestingâ€¦':'Request reset')),
+      child:Text(busy?'Requesting…':'Request reset')),
       if(message!=null)Padding(padding:const EdgeInsets.only(top:15),
       child:Text(message!))
     ]))
@@ -422,7 +416,7 @@ class SignInScreen extends StatefulWidget {
           if(ok)Navigator.of(context).popUntil((r)=>r.isFirst);
         }
       },
-      child:Text(busy?'Updatingâ€¦':'Reset password'))
+      child:Text(busy?'Updating…':'Reset password'))
     ])))
   ]);
 }
@@ -479,10 +473,6 @@ class _AuthScaffold extends StatelessWidget {
       // screen or large accessibility text would clip controls, allow
       // natural scrolling. Sign-up always remains scrollable.
 
-      // Always permit scrolling. Otherwise the footer can be clipped while
-      // the last controls are unreachable even before the keyboard opens.
-
-
       return Stack(children: [
         Positioned.fill(
           child: Image.asset(
@@ -492,13 +482,7 @@ class _AuthScaffold extends StatelessWidget {
             semanticLabel: 'Co-living PG community artwork',
           ),
         ),
-        // A light scrim keeps the compact keyboard-open login readable over
-        // the illustration without changing the ordinary COME.in design.
-        if (keyboardOpen)
-          const Positioned.fill(
-            child: ColoredBox(color: Color(0xF5FFF3F2)),
-          ),
-        Positioned.fill(
+          Positioned.fill(
           // Constrain the scrolling viewport to the area above the keyboard.
           // Padding alone would leave the scrollable viewport behind the IME.
           bottom: keyboardInset,
@@ -530,7 +514,7 @@ class _AuthBrand extends StatelessWidget {
   Widget build(BuildContext context)=>Image.asset(
     'assets/brand/comein_auth_logo.png',
     width:235,height:92,fit:BoxFit.contain,
-    semanticLabel:'COME.in â€” Spaces People Belong',
+    semanticLabel:'COME.in — Spaces People Belong',
   );
 }
 class _AuthField extends StatelessWidget {

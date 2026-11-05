@@ -1,4 +1,5 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:pg_resident/main.dart';
 import 'package:pg_resident/app/controller.dart';
 import 'package:pg_resident/core/api_client.dart';
@@ -126,6 +127,29 @@ AppController controller(String? role){
     await tester.pumpAndSettle();
     expect(find.text('Reset password'),
     findsOneWidget);
+  });
+  testWidgets('Sign-in stays visible when Android keyboard opens',
+  (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetViewInsets();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(PGApp(controller:controller(null)));
+    // Simulate the phone keyboard taking up the lower screen.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 340);
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome back!'), findsOneWidget);
+    expect(find.text('Sign in to COME.in'), findsNothing);
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    // The password field must be reachable by scrolling the form viewport.
+    final password = find.byType(TextFormField).last;
+    await tester.ensureVisible(password);
+    await tester.pumpAndSettle();
+    final bottom = tester.getBottomLeft(password).dy + tester.getSize(password).height;
+    expect(bottom, lessThanOrEqualTo(844 - 340));
   });
   testWidgets('Owner navigation exposes complete management directory',
   (tester)async{

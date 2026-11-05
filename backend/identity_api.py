@@ -56,8 +56,19 @@ async def submit_proof(file: UploadFile = File(...), u: User = Depends(current),
              mime == 'application/pdf' and data.startswith(b'%PDF-'))
     if not valid:
         raise HTTPException(415, 'Only valid JPG, PNG and PDF documents are accepted')
-    # One current proof per resident. A new submission supersedes earlier proof,
-    # but its review history stays in the tenant's records for audit.
+    # Serialize submissions for this resident on PostgreSQL. This prevents two
+    # parallel uploads from bypassing the single-active-submission rule.
+    # SQLite does not implement SELECT FOR UPDATE; production uses PostgreSQL.
+    s.scalar(select(User).where(User.id == u.id,
+             User.tenant_id == u.tenant_id).with_for_update())
+    latest = s.scalar(select(ResidentProof).where(
+        ResidentProof.tenant_id == u.tenant_id,
+        ResidentProof.resident_id == u.id
+    ).order_by(ResidentProof.id.desc()).limit(1))
+    if latest and latest.status != 'rejected':
+        raise HTTPException(409, 'A document is already submitted. You can upload again only after rejection.')
+    # Rejected records remain available for audit. A replacement becomes the
+    # only current proof; prior records are never overwritten.
     name = (file.filename or 'identity-proof').replace('\\', '/').split('/')[-1][:180]
     p = ResidentProof(tenant_id=u.tenant_id, resident_id=u.id, filename=name,
                       mime=mime, content=data, size=len(data))
@@ -106,8 +117,12 @@ def review_proof(identifier: int, data: ProofReview,
                  u: User = Depends(current), s: Session = Depends(db)):
     role(u, 'owner', 'manager')
     p = _get_proof(s, u, identifier)
-    if p.status != 'pending':
-        raise HTTPException(409, 'This document has already been reviewed')
+    newest = s.scalar(select(ResidentProof).where(
+        ResidentProof.tenant_id == u.tenant_id,
+        ResidentProof.resident_id == p.resident_id
+    ).order_by(ResidentProof.id.desc()).limit(1))
+    if p.status != 'pending' or not newest or newest.id != p.id:
+        raise HTTPException(409, 'Only the latest pending document may be reviewed')
     p.status = data.decision
     p.review_note = data.note.strip()
     p.reviewed_by = u.id

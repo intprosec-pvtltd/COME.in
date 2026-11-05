@@ -46,3 +46,27 @@ def test_resident_proof_is_tenant_scoped(monkeypatch):
         assert client.post(f'/api/identity/proofs/{fid}/review',headers=headers(0),json={'decision':'approved'}).status_code==200
         assert client.post(f'/api/identity/proofs/{fid}/review',headers=headers(0),json={'decision':'rejected'}).status_code==409
         assert client.get(f'/api/identity/proofs/{fid}/file',headers=headers(0)).content==payload
+
+        # Once approved, the resident must not submit another proof.
+        assert client.post('/api/identity/proofs',headers=headers(1),
+            files={'file':('another.png',payload,'image/png')}).status_code==409
+
+        # A second resident's pending upload is also locked until rejection.
+        second = client.post('/api/identity/proofs',headers=headers(3),
+            files={'file':('second.png',payload,'image/png')})
+        assert second.status_code==201,second.text
+        sid=second.json()['id']
+        assert client.post('/api/identity/proofs',headers=headers(3),
+            files={'file':('repeat.png',payload,'image/png')}).status_code==409
+        reject=client.post(f'/api/identity/proofs/{sid}/review',headers=headers(2),
+            json={'decision':'rejected','note':'Please submit a clearer image'})
+        assert reject.status_code==200,reject.text
+        assert reject.json()['review_note']=='Please submit a clearer image'
+        replacement=client.post('/api/identity/proofs',headers=headers(3),
+            files={'file':('replacement.png',payload,'image/png')})
+        assert replacement.status_code==201,replacement.text
+        newest=client.get('/api/identity/proofs/me',headers=headers(3)).json()[0]
+        assert newest['id']==replacement.json()['id']
+        assert newest['status']=='pending'
+        assert client.post(f'/api/identity/proofs/{sid}/review',headers=headers(2),
+            json={'decision':'approved'}).status_code==409
