@@ -73,6 +73,15 @@ class _DashboardState extends State<Dashboard> {
       Text(app.owner?'A good day starts with everything in place.':'${app.profile['tenant']?['name']} · ${app.profile['room']??'Room not assigned'}',
       style:const TextStyle(fontSize:12,
       color:muted)),
+      if(!app.owner && !app.staff) Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: FeatureTile(
+          title: 'Submit identity proof',
+          subtitle: 'Upload JPG, PNG or PDF for your PG owner to review',
+          icon: Icons.badge_outlined,
+          onTap: () => openPage(context, 'identityProof'),
+        ),
+      ),
       if(app.owner)Padding(
         padding:const EdgeInsets.only(top:13,bottom:14),
         child:Material(

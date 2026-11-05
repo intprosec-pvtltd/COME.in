@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -70,7 +70,7 @@ class ApiException implements Exception {
     ] = 'Bearer $token';
     if (body != null) req.body = jsonEncode(body);
     try {
-      final streamed = await req.send().timeout(const Duration(seconds: 15));
+      final streamed = await req.send().timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamed);
       dynamic data;
       try {
@@ -103,3 +103,4 @@ typedef ApiRequest = Future<dynamic> Function(String,
   Map<String,
   dynamic>? body
 });
+

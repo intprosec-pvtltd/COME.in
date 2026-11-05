@@ -31,6 +31,11 @@ class AccountPage extends StatelessWidget {
         FeatureTile(title:'Properties',subtitle:'View and update your PG locations',
           icon:Icons.home_outlined,onTap:()=>openPage(context,'properties')),
       ],
+      if(!app.owner && !app.staff) FeatureTile(
+        title:'Submit identity proof',
+        subtitle:'Send a JPG, PNG or PDF identity document to your PG owner',
+        icon:Icons.badge_outlined,
+        onTap:()=>openPage(context,'identityProof')),
       const SectionTitle('Preferences & security'),
       for(final item in [
         if(!app.owner&&!app.staff)('accommodation','My accommodation',Icons.home_outlined),

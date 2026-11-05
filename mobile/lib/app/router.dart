@@ -8,6 +8,7 @@ import '../features/finance/finance.dart';
 import '../features/operations/operations.dart';
 import '../features/community/chat.dart';
 import '../features/account/account.dart';
+import '../features/account/identity_proof.dart';
 const ownerRoutes={
   'properties',
   'propertyDetail',
@@ -16,6 +17,7 @@ const ownerRoutes={
   'allocation',
   'residents',
   'residentDetail',
+  'residentProofReview',
   'dues',
   'payments',
   'reports',
@@ -74,6 +76,8 @@ Widget pageFor(String route,
   'community'=>const ChatPage(),
   'groupInfo'=>const GroupInfoPage(),
   'account'=>const AccountPage(),
+  'identityProof'=>const IdentityProofPage(),
+  'residentProofReview'=>IdentityProofPage(residentId:id!),
   'profileEditor'=>const ProfileEditorPage(),
   'password'=>const PasswordPage(),
   'appearance'=>const AppearancePage(),

@@ -449,6 +449,11 @@ Widget propertySelector(BuildContext context){
         initial:r),
         child:const Text('Edit resident'))
       ])),
+      if(app.owner) FeatureTile(
+        title:'Review identity proof',
+        subtitle:'View documents uploaded by this resident and approve or reject',
+        icon:Icons.assignment_ind_outlined,
+        onTap:()=>openPage(context,'residentProofReview',id:id)),
       if(app.profile['role']=='owner')FeatureTile(title:'Reissue temporary login',
         subtitle:'Generate new one-time resident access details',icon:Icons.lock_reset,
         onTap:()async{

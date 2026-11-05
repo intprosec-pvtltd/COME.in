@@ -253,3 +253,9 @@ from platform_api import router as platform_router, install_schema as install_pl
 install_platform_schema()
 app.include_router(platform_router)
 
+
+# Resident ID proof (manual review; DigiLocker disabled).
+from identity_api import router as identity_router
+app.include_router(identity_router)
+Base.metadata.create_all(engine)
+
