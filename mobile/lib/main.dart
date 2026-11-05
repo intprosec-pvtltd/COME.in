@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app/controller.dart';
 import 'app/router.dart';
 import 'core/app_theme.dart';
@@ -36,5 +37,8 @@ void main(){
   cardTheme:CardThemeData(color:const Color(0xFF37243F),
   shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)))),
   themeMode:controller.themeMode,
+  locale:Locale(controller.languageCode),
+  supportedLocales:const [Locale('en'),Locale('hi'),Locale('ta'),Locale('te'),Locale('kn'),Locale('ml')],
+  localizationsDelegates:const [GlobalMaterialLocalizations.delegate,GlobalWidgetsLocalizations.delegate,GlobalCupertinoLocalizations.delegate],
   home:controller.restoring?const SplashScreen():!controller.onboardingSeen?const WelcomeScreen():!controller.signedIn?const SignInScreen():controller.profile['must_change_password']==true?const FirstLoginPasswordPage():const AppShell())));
 }

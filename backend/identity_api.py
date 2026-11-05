@@ -5,6 +5,7 @@ Only resident uploader and owner/manager of the same PG tenant can see proof.
 Binary content is persisted in PostgreSQL (not Render ephemeral disk).
 """
 from datetime import datetime, timezone
+from risk_checks import inspect_file
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from pydantic import BaseModel, Field
@@ -30,10 +31,12 @@ class ResidentProof(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-def _record(p):
+def _record(p, other_hashes=()):
+    result = inspect_file(p.content, p.mime, other_hashes)
     return {'id': p.id, 'resident_id': p.resident_id, 'filename': p.filename,
             'mime': p.mime, 'size': p.size, 'status': p.status,
-            'review_note': p.review_note,
+            'review_note': p.review_note, 'risk_level': result['risk_level'],
+            'risk_flags': result['risk_flags'], 'authenticity_verified': False,
             'created_at': p.created_at.isoformat() if p.created_at else '',
             'reviewed_at': p.reviewed_at.isoformat() if p.reviewed_at else None}
 
@@ -80,14 +83,19 @@ async def submit_proof(file: UploadFile = File(...), u: User = Depends(current),
           'residents', audience='owners')
     s.commit()
     s.refresh(p)
-    return _record(p)
+    prior = s.scalars(select(ResidentProof).where(ResidentProof.tenant_id == u.tenant_id,
+        ResidentProof.resident_id != u.id, ResidentProof.id != p.id)).all()
+    import hashlib
+    return _record(p, (hashlib.sha256(q.content).hexdigest() for q in prior))
 
 @router.get('/proofs/me')
 def my_proofs(u: User = Depends(current), s: Session = Depends(db)):
     role(u, 'resident')
-    return [_record(p) for p in s.scalars(select(ResidentProof).where(
-        ResidentProof.tenant_id == u.tenant_id, ResidentProof.resident_id == u.id
-    ).order_by(ResidentProof.id.desc())).all()]
+    proofs = s.scalars(select(ResidentProof).where(
+        ResidentProof.tenant_id == u.tenant_id).order_by(ResidentProof.id.desc())).all()
+    import hashlib
+    other = [hashlib.sha256(p.content).hexdigest() for p in proofs if p.resident_id != u.id]
+    return [_record(p, other) for p in proofs if p.resident_id == u.id]
 
 @router.get('/residents/{resident_id}/proofs')
 def resident_proofs(resident_id: int, u: User = Depends(current), s: Session = Depends(db)):
@@ -96,9 +104,11 @@ def resident_proofs(resident_id: int, u: User = Depends(current), s: Session = D
         User.tenant_id == u.tenant_id, User.role == 'resident'))
     if not resident:
         raise HTTPException(404, 'Resident not found')
-    return [_record(p) for p in s.scalars(select(ResidentProof).where(
-        ResidentProof.tenant_id == u.tenant_id, ResidentProof.resident_id == resident_id
-    ).order_by(ResidentProof.id.desc())).all()]
+    proofs = s.scalars(select(ResidentProof).where(
+        ResidentProof.tenant_id == u.tenant_id).order_by(ResidentProof.id.desc())).all()
+    import hashlib
+    other = [hashlib.sha256(p.content).hexdigest() for p in proofs if p.resident_id != resident_id]
+    return [_record(p, other) for p in proofs if p.resident_id == resident_id]
 
 @router.get('/proofs/{identifier}/file')
 def view_document(identifier: int, u: User = Depends(current), s: Session = Depends(db)):

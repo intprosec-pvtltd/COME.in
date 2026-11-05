@@ -1,3 +1,4 @@
+import '../../core/localization.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -217,6 +218,25 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     );
   }
 
+  Widget _riskCard(Map<String, dynamic> proof) {
+    final flags=(proof['risk_flags'] as List? ?? []).map((e)=>'$e').toList();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color:const Color(0xFFFFF4E5),
+        borderRadius:BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(tr(context,'Authenticity not verified'),
+          style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF815418))),
+        const SizedBox(height:5),
+        Text(flags.isEmpty ? tr(context,'No flags found') : flags.join(' • '),
+          style:const TextStyle(fontSize:12)),
+        const SizedBox(height:5),
+        Text(tr(context,'Not a government verification'),
+          style:const TextStyle(fontSize:11)),
+      ]),
+    );
+  }
+
   Widget _proofCard(Map<String, dynamic> proof, {required bool current}) {
     final note = '${proof['review_note'] ?? ''}'.trim();
     final status = '${proof['status']}';
@@ -233,6 +253,10 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         _status(proof),
+        if (ownerView) ...[
+          const SizedBox(height: 9),
+          _riskCard(proof),
+        ],
         if (note.isNotEmpty) Padding(
           padding: const EdgeInsets.only(top: 10),
           child: Text('Owner note: $note')),
@@ -244,7 +268,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
             padding: const EdgeInsets.symmetric(vertical: 12)),
           onPressed: () => view(proof),
           icon: const Icon(Icons.visibility_outlined),
-          label: const Text('Open document'))),
+          label: Text(tr(context,'Open document')))),
         if (ownerView && current && status == 'pending') ...[
           const SizedBox(height: 10),
           Row(children: [
@@ -253,14 +277,14 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
                 backgroundColor: green, foregroundColor: Colors.white),
               onPressed: () => review(proof, 'approved'),
               icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Approve'))),
+              label: Text(tr(context,'Approve')))),
             const SizedBox(width: 10),
             Expanded(child: FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: red, foregroundColor: Colors.white),
               onPressed: () => review(proof, 'rejected'),
               icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Reject'))),
+              label: Text(tr(context,'Reject')))),
           ]),
         ],
       ],

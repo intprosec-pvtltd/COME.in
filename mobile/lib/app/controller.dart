@@ -11,6 +11,15 @@ class AppController extends ChangeNotifier {
   Map<String,
   dynamic> data = {
   };
+  String languageCode = 'en';
+  /// Persist the chosen language and refresh the entire app.
+  Future<void> setLanguage(String code) async {
+    if (!const ['en', 'hi', 'ta', 'te', 'kn', 'ml'].contains(code)) return;
+    if (languageCode == code) return;
+    await (await SharedPreferences.getInstance()).setString('language_code', code);
+    languageCode = code;
+    notifyListeners();
+  }
   bool restoring = true,
   onboardingSeen = false,
   busy = false;
@@ -63,6 +72,8 @@ class AppController extends ChangeNotifier {
   Future<void> initialize() async {
     final prefs=await SharedPreferences.getInstance();
     onboardingSeen=prefs.getBool('onboarding_seen')??false;
+    final code=prefs.getString('language_code')??'en';
+    languageCode=['en','hi','ta','te','kn','ml'].contains(code)?code:'en';
     try {
       api.token=await sessions.restoreToken();
       if(api.token!=null)await refresh();

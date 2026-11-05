@@ -441,7 +441,22 @@ def payment(data:ProofInput,u:User=Depends(current),s:Session=Depends(db)):
  reference=(data.reference or '').strip() or 'PROOF-'+uuid.uuid4().hex.upper()[:20]
  if len(reference)<6:raise HTTPException(422,'Invalid reference')
  if s.scalar(select(Payment).where(Payment.tenant_id==u.tenant_id,Payment.reference==reference,Payment.status!='rejected')):raise HTTPException(409,'Reference already submitted')
- safe_file(s,u,data.file_id,'payment');p=Payment(tenant_id=u.tenant_id,resident_id=u.id,invoice_id=i.id,amount=data.amount,reference=reference);s.add(p);s.flush();put(s,u.tenant_id,'payment_meta',p.id,{'file_id':data.file_id});alert(s,u,'Payment submitted',f'{u.name}: {data.amount}','payments',audience='owners');commit(s);return {'id':p.id}
+ safe_file(s,u,data.file_id,'payment')
+ from risk_checks import inspect_file
+ risk={'risk_level':'unverified','risk_flags':['No proof attached'], 'authenticity_verified':False}
+ if data.file_id:
+  f=tenant_get(s,PrivateFile,data.file_id,u.tenant_id)
+  raw=(STORAGE/f.key).read_bytes() if (STORAGE/f.key).is_file() else b''
+  # Compare submitted payment file fingerprints within the same PG tenant.
+  known=[meta(s,u.tenant_id,'payment_meta',q.id).get('sha256') for q in s.scalars(
+   select(Payment).where(Payment.tenant_id==u.tenant_id,Payment.status!='rejected'))]
+  risk=inspect_file(raw,f.mime,filter(None,known))
+  if not raw:
+   risk['risk_flags'].append('Uploaded payment proof was not accessible for analysis')
+   risk['risk_level']='review_required'
+ p=Payment(tenant_id=u.tenant_id,resident_id=u.id,invoice_id=i.id,amount=data.amount,reference=reference);s.add(p);s.flush()
+ put(s,u.tenant_id,'payment_meta',p.id,{'file_id':data.file_id,**risk})
+ alert(s,u,'Payment submitted',f'{u.name}: {data.amount}','payments',audience='owners');commit(s);return {'id':p.id}
 class Review(BaseModel):
  decision:str=Field(pattern='^(approved|rejected)$')
  reason:str=''

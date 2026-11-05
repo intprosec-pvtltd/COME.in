@@ -1,3 +1,4 @@
+import '../../core/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../app/controller.dart';
@@ -150,25 +151,27 @@ class SignInScreen extends StatefulWidget {
         // keyboard, just as on owner registration. The shared scroll viewport
         // handles reduced keyboard space instead of swapping the whole header.
         const SizedBox(height: 5),
+        const SizedBox(width:220,child:LanguagePicker()),
+        const SizedBox(height:8),
         const _AuthBrand(),
         const SizedBox(height: 16),
-        const Text('Welcome back!', textAlign: TextAlign.center,
+        Text(tr(context,'Welcome back!'), textAlign: TextAlign.center,
           style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: plum)),
         const SizedBox(height: 2),
-        const Text('Same spaces. Brighter days.', textAlign: TextAlign.center,
+        Text(tr(context,'Same spaces. Brighter days.'), textAlign: TextAlign.center,
           style: TextStyle(fontSize: 14, color: Color(0xFF84718B))),
         const SizedBox(height: 12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
           _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
             autofillHints:const [AutofillHints.username],
             textInputAction:TextInputAction.next,
-            decoration:const InputDecoration(hintText:'Email or Phone',prefixIcon:Icon(Icons.mail_outline)),
+            decoration:InputDecoration(hintText:tr(context,'Email or Phone'),prefixIcon:const Icon(Icons.mail_outline)),
             validator:(v)=>v==null||(!v.contains('@')&&!RegExp(r'^\+?[0-9 ]{7,18}$').hasMatch(v))?'Enter your email or phone':null)),
           const SizedBox(height:10),
           _AuthField(child:TextFormField(controller:password,obscureText:hidden,
             autofillHints:const [AutofillHints.password],
             textInputAction:TextInputAction.done,
-            decoration:InputDecoration(hintText:'Password',prefixIcon:const Icon(Icons.lock_outline),
+            decoration:InputDecoration(hintText:tr(context,'Password'),prefixIcon:const Icon(Icons.lock_outline),
               suffixIcon:IconButton(tooltip:hidden?'Show password':'Hide password',
                 onPressed:()=>setState(()=>hidden=!hidden),icon:Icon(hidden?Icons.visibility_outlined:Icons.visibility_off_outlined))),
             validator:(v)=>v==null||v.isEmpty?'Enter your password':null,onFieldSubmitted:(_)=>login())),
@@ -176,17 +179,17 @@ class SignInScreen extends StatefulWidget {
           Row(children:[
             SizedBox(width:32,height:36,child:Checkbox(value:remember,activeColor:plum,
               onChanged:(v)=>setState(()=>remember=v??false))),
-            const Expanded(child:Text('Keep me signed in',style:TextStyle(fontSize:12,color:Color(0xFF76657C)))),
+            Expanded(child:Text(tr(context,'Keep me signed in'),style:TextStyle(fontSize:12,color:Color(0xFF76657C)))),
             TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RecoveryScreen())),
-              child:const Text('Forgot password?',style:TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:plum)))
+              child:Text(tr(context,'Forgot password?'),style:TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:plum)))
           ]),
           if(error!=null)Padding(padding:const EdgeInsets.only(bottom:5),child:Text(error!,style:const TextStyle(color:Colors.red,fontSize:12))),
           const SizedBox(height:6),
-          _AuthPrimary(label:'Sign in',busy:busy,onPressed:login),
+          _AuthPrimary(label:tr(context,'Sign in'),busy:busy,onPressed:login),
         ])),
         const SizedBox(height:3),
         TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RegistrationScreen())),
-          child:const Text('Create account',style:TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
+          child:Text(tr(context,'Create account'),style:TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
         // Keep the original footer in the scroll content. It can be reached
         // by scrolling while the keyboard is open, without obscuring fields.
         const _AuthSocialInfo(),

@@ -1,3 +1,4 @@
+import '../../core/localization.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -426,6 +427,23 @@ class PaymentsPage extends StatelessWidget {
       children:[
         StatusPill('${p['status']}'),
         const SizedBox(height:10),
+        if(app.owner) Container(
+          width:double.infinity,
+          padding:const EdgeInsets.all(12),
+          decoration:BoxDecoration(color:const Color(0xFFFFF4E5),
+            borderRadius:BorderRadius.circular(12)),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(tr(context,'Authenticity not verified'),
+              style:const TextStyle(fontWeight:FontWeight.bold)),
+            const SizedBox(height:5),
+            Text((p['risk_flags'] as List? ?? []).isEmpty
+              ? tr(context,'No flags found')
+              : (p['risk_flags'] as List).join(' • ')),
+            const SizedBox(height:5),
+            Text(tr(context,'Check bank credit before approval'),
+              style:const TextStyle(fontSize:12)),
+          ])),
+
         if(p[
           'file_id'
         ]!=null)OutlinedButton.icon(onPressed:()=>openPrivateFile(context,

@@ -1,3 +1,4 @@
+import 'localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -73,12 +74,12 @@ String indiaTime(dynamic value){
     physics:const AlwaysScrollableScrollPhysics(),
     children:[
       if(subtitle!=null)Padding(padding:const EdgeInsets.only(bottom:18),
-      child:Text(subtitle!,
+      child:Text(tr(context,subtitle!),
       style:const TextStyle(color:muted,
       fontSize:12))),
       ...children
     ]);
-    return Scaffold(appBar:AppBar(title:Text(title,
+    return Scaffold(appBar:AppBar(title:Text(tr(context,title),
     style:const TextStyle(fontWeight:FontWeight.w800,
     fontSize:21)),
     actions:actions),
@@ -114,11 +115,11 @@ String indiaTime(dynamic value){
   @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.only(top:16,
   bottom:10),
   child:Row(children:[
-    Expanded(child:Text(text,
+    Expanded(child:Text(tr(context,text),
     style:const TextStyle(fontSize:16,
     fontWeight:FontWeight.w800))),
     if(action!=null)TextButton(onPressed:action,
-    child:Text(label))
+    child:Text(tr(context,label)))
   ]));
 } class StatusPill extends StatelessWidget {
   const StatusPill(this.status,
@@ -144,8 +145,8 @@ String indiaTime(dynamic value){
     vertical:5),
     decoration:BoxDecoration(color:color.withValues(alpha:.12),
     borderRadius:BorderRadius.circular(8)),
-    child:Text(status.replaceAll('_',
-    ' '),
+    child:Text(tr(context,status.replaceAll('_',
+    ' ')),
     style:TextStyle(fontSize:10,
     fontWeight:FontWeight.w800,
     color:color)));
@@ -215,10 +216,10 @@ String indiaTime(dynamic value){
     const SizedBox(width:13),
     Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
     children:[
-      Text(title,
+      Text(tr(context,title),
       style:const TextStyle(fontWeight:FontWeight.w800,
       fontSize:13)),
-      if(subtitle.isNotEmpty)Text(subtitle,
+      if(subtitle.isNotEmpty)Text(tr(context,subtitle),
       style:const TextStyle(fontSize:11,
       color:muted))
     ])),

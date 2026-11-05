@@ -1,3 +1,4 @@
+import '../../core/localization.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../app/router.dart';
@@ -37,6 +38,7 @@ class AccountPage extends StatelessWidget {
         icon:Icons.badge_outlined,
         onTap:()=>openPage(context,'identityProof')),
       const SectionTitle('Preferences & security'),
+      const Surface(child: LanguagePicker()),
       for(final item in [
         if(!app.owner&&!app.staff)('accommodation','My accommodation',Icons.home_outlined),
         ('password','Change password',Icons.lock_outline),
