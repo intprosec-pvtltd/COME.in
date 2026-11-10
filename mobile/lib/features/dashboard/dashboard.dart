@@ -1,3 +1,4 @@
+import '../../core/localization.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../app/router.dart';
@@ -60,13 +61,13 @@ class _DashboardState extends State<Dashboard> {
     children:[
       const OfficialBrand(width:155),
       const SizedBox(height:22),
-      Text(app.owner?'YOUR PORTFOLIO · ${app.period}':app.staff?'YOUR ASSIGNED WORK':'WELCOME HOME',
+      Text(app.owner?'${tr(context,'YOUR PORTFOLIO')} · ${app.period}':app.staff?tr(context,'YOUR ASSIGNED WORK'):tr(context,'WELCOME HOME'),
       style:const TextStyle(color:muted,
       fontSize:10,
       letterSpacing:1.4,
       fontWeight:FontWeight.w800)),
       const SizedBox(height:7),
-      Text('${comeinGreeting(DateTime.now())}, ${'${app.profile['name']}'.split(' ').first}.',
+      Text('${tr(context,comeinGreeting(DateTime.now()))}, ${'${app.profile['name']}'.split(' ').first}.',
       style:const TextStyle(fontSize:27,
       fontWeight:FontWeight.w900)),
       const SizedBox(height:7),
@@ -117,7 +118,7 @@ class _DashboardState extends State<Dashboard> {
       'complaints'),
       child:const Text('View assigned tasks')))else HeroCard(label:app.owner?'Rent collected':'Your rent balance',
       value:app.owner && !showRent ? '₹ •••••' : inr(app.owner?collected:billed-collected),
-      detail:app.owner?'${billed==0?0:(collected/billed*100).round()}% collected · ${inr(billed-collected)} outstanding':inv.isEmpty?'No invoices yet':'Pay directly to your PG owner',
+      detail:app.owner?'${billed==0?0:(collected/billed*100).round()}% collected · ${inr(billed-collected)} outstanding':tr(context,inv.isEmpty?'No invoices yet':'Pay directly to your PG owner'),
       trailing:app.owner?IconButton(tooltip:showRent?'Hide financial amounts':'Show financial amounts',
         onPressed:()=>setState(()=>showRent=!showRent),
         icon:Icon(showRent?Icons.visibility_off_outlined:Icons.visibility_outlined,color:Colors.white)):null,
@@ -138,12 +139,12 @@ class _DashboardState extends State<Dashboard> {
           fontSize:12))),
           TextButton(onPressed:()=>openPage(context,
           'reports'),
-          child:const Text('View →',
+          child:Text(tr(context,'View →'),
           style:TextStyle(color:Colors.white)))
         ])
       ]):FilledButton.tonal(onPressed:()=>openPage(context,
       'rent'),
-      child:const Text('View rent & payment →'))),
+      child:Text(tr(context,'View rent & payment →')))),
       if(app.owner)Wrap(spacing:12,
       runSpacing:12,
       children:[
@@ -233,7 +234,7 @@ class _DashboardState extends State<Dashboard> {
     style:const TextStyle(fontWeight:FontWeight.w900,
     fontSize:21)),
     const SizedBox(height:4),
-    Text(label,
+    Text(tr(context,label),
     style:const TextStyle(color:muted,
     fontSize:11))
   ])));
@@ -312,7 +313,7 @@ class _DashboardState extends State<Dashboard> {
       'Profile & settings',
       Icons.settings_outlined)
     ]);
-    return PageBody(title:app.owner?'Manage your PG':'My PG life',
+    return PageBody(title:app.owner?'Manage your PG':'My PG Life',
     subtitle:'Everything you need, in one place.',
     children:[
       Wrap(spacing:12,
@@ -327,11 +328,11 @@ class _DashboardState extends State<Dashboard> {
           color:lavender,
           size:27),
           const SizedBox(height:14),
-          Text(e.$2,
+          Text(tr(context,e.$2),
           style:const TextStyle(fontWeight:FontWeight.w800,
           fontSize:13)),
           const SizedBox(height:8),
-          const Text('Open →',
+          Text(tr(context,'Open →'),
           style:TextStyle(color:muted,
           fontSize:11))
         ])))

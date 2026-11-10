@@ -8,6 +8,36 @@ import '../../app/router.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
 import '../management/management.dart';
+// Presentation-only status: an unverified proof never changes the rent ledger.
+String invoiceReviewStatus(Map<String, dynamic> invoice, List<Map<String, dynamic>> payments) {
+  final financialStatus = invoiceStatus(invoice);
+  if (financialStatus == 'Paid') return financialStatus;
+  final id = invoice['id'];
+  if (payments.any((payment) => payment['invoice_id'] == id && payment['status'] == 'pending')) {
+    return 'Verification pending';
+  }
+  return financialStatus;
+}
+/// Returns the latest proof for a single invoice, independent of API row order.
+/// Prior rejected proofs must not hide an active pending resubmission.
+Map<String, dynamic>? latestInvoiceProof(
+  Map<String, dynamic> invoice,
+  List<Map<String, dynamic>> payments,
+) {
+  final matching = payments.where((p) =>
+      '${p['invoice_id']}' == '${invoice['id']}').toList();
+  if (matching.isEmpty) return null;
+  matching.sort((a, b) {
+    final aId = int.tryParse('${a['id']}') ?? 0;
+    final bId = int.tryParse('${b['id']}') ?? 0;
+    return aId.compareTo(bId);
+  });
+  return matching.last;
+}
+
+/// Only owner-approved payments count as paid; uploaded proofs do not.
+double verifiedAmount(Map<String, dynamic> invoice) => amount(invoice['paid']);
+
 String invoiceStatus(Map<String,
 dynamic> i)=>amount(i[
   'outstanding'
@@ -51,7 +81,8 @@ dynamic>> scopedInvoices(AppController app){
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
     final all=scopedInvoices(app),
-    inv=all.where((i)=>filter=='All'||invoiceStatus(i)==filter).toList();
+    payments=app.rows('payments'),
+    inv=all.where((i)=>filter=='All'||invoiceReviewStatus(i,payments)==filter).toList();
     return PageBody(title:app.owner?'Rent & dues':'My rent',
     refresh:app.refresh,
     children:[
@@ -72,43 +103,81 @@ dynamic>> scopedInvoices(AppController app){
           'All',
           'Paid',
           'Pending',
+          'Verification pending',
           'Partial',
           'Overdue'
-        ])ChoiceChip(label:Text(s),
+        ])ChoiceChip(label:Text(tr(context,s)),
         selected:filter==s,
         onSelected:(_)=>setState(()=>filter=s))
       ]),
       const SizedBox(height:15),
-      for(final i in inv)Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+      for(final i in inv) Builder(builder:(context){
+        final proof = latestInvoiceProof(i, payments);
+        final awaitingReview = invoiceReviewStatus(i,payments) == 'Verification pending';
+        final rejectedProof = !awaitingReview &&
+          proof != null && proof['status'] == 'rejected' &&
+          amount(i['outstanding']) > 0;
+        return Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
         Row(children:[
           Expanded(child:Text(app.owner?'${app.find('residents',i['resident_id']as int)?['name']??'Resident'}':'${i['period']}',
           style:const TextStyle(fontWeight:FontWeight.w800))),
-          StatusPill(invoiceStatus(i))
+          StatusPill(invoiceReviewStatus(i,payments))
         ]),
         const SizedBox(height:12),
-        Text(inr(i[
-          'outstanding'
-        ]),
-        style:const TextStyle(fontSize:24,
-        fontWeight:FontWeight.w900)),
-        Text('Billed ${inr(i['amount'])} · Verified ${inr(i['paid'])}',
-        style:const TextStyle(color:muted,
-        fontSize:11)),
+        Text(tr(context,'Amount paid'),
+          style:const TextStyle(fontSize:12,color:muted,fontWeight:FontWeight.w600)),
+        const SizedBox(height:3),
+        Text(inr(verifiedAmount(i)),
+          style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
+        const SizedBox(height:6),
+        Text('${tr(context,'Remaining balance')}: ${inr(i['outstanding'])}',
+          style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
+        const SizedBox(height:3),
+        Text('${tr(context,'Billed')}: ${inr(i['amount'])}  ·  ${tr(context,'Verified')}: ${inr(i['paid'])}',
+          style:const TextStyle(color:muted,fontSize:11)),
+        if(awaitingReview && proof != null)...[
+          const SizedBox(height:8),
+          Text('${tr(context,'Submitted for verification')}: ${inr(proof['amount'])}',
+            style:const TextStyle(color:Color(0xFF9A5200),fontSize:12,fontWeight:FontWeight.w700)),
+          Text(tr(context,'Payment proof submitted; awaiting owner bank-credit verification.'),
+            style:const TextStyle(color:Color(0xFF9A5200),fontSize:11)),
+        ],
+        if(rejectedProof)...[
+          const SizedBox(height:10),
+          Container(width:double.infinity,
+            padding:const EdgeInsets.all(12),
+            decoration:BoxDecoration(color:const Color(0xFFFFF0F1),
+              borderRadius:BorderRadius.circular(12)),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(children:[
+                const Icon(Icons.error_outline,color:Color(0xFFA92842),size:19),
+                const SizedBox(width:7),
+                Expanded(child:Text(tr(context,'Proof rejected — submit the correct proof'),
+                  style:const TextStyle(fontWeight:FontWeight.w800,color:Color(0xFFA92842),fontSize:12))),
+              ]),
+              if('${proof['reason']??''}'.trim().isNotEmpty)...[
+                const SizedBox(height:5),
+                Text('${tr(context,'Reason')}: ${proof['reason']}',
+                  style:const TextStyle(fontSize:11)),
+              ],
+            ])),
+        ],
         const SizedBox(height:5),
-        Text('Due ${i['due_date']}',
+        Text('${tr(context,'Due')} ${i['due_date']}',
         style:const TextStyle(color:muted,
         fontSize:11)),
         if(!app.owner&&amount(i[
           'outstanding'
         ])>0)Padding(padding:const EdgeInsets.only(top:15),
-        child:FilledButton(onPressed:()=>openPage(context,
+        child:FilledButton(onPressed:invoiceReviewStatus(i,payments)=='Verification pending'?null:()=>openPage(context,
         'submitPayment',
         id:i[
           'id'
         ]as int),
-        child:const Text('Submit payment proof')))
-      ])),
+        child:Text(tr(context,awaitingReview?'Awaiting owner verification':rejectedProof?'Resubmit correct proof':'Submit payment proof'))))
+      ]));
+      }),
       if(inv.isEmpty)const EmptyState('No invoices in this view.'),
       if(app.owner)...[
         FilledButton.icon(onPressed:()=>Navigator.push<void>(context,
@@ -250,13 +319,13 @@ dynamic>> scopedInvoices(AppController app){
       children:[
         HeroCard(label:'Invoice balance',value:inr(balance)),
         Surface(child:Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          const Text('Payment type',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:plum)),
+          Text(tr(context,'Payment type'),style:TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:plum)),
           const SizedBox(height:12),
           Row(children:[
-            Expanded(child:ChoiceChip(label:const Text('Fully paid'),selected:fullyPaid,
+            Expanded(child:ChoiceChip(label:Text(tr(context,'Fully paid')),selected:fullyPaid,
               onSelected:(_)=>setState(()=>fullyPaid=true))),
             const SizedBox(width:10),
-            Expanded(child:ChoiceChip(label:const Text('Partially paid'),selected:!fullyPaid,
+            Expanded(child:ChoiceChip(label:Text(tr(context,'Partially paid')),selected:!fullyPaid,
               onSelected:(_)=>setState(()=>fullyPaid=false))),
           ]),
           const SizedBox(height:16),
@@ -292,7 +361,7 @@ dynamic>> scopedInvoices(AppController app){
               'file_id':file?['id']
             }),success:'Payment proof submitted for owner verification');
             if(mounted){setState(()=>busy=false);if(ok)Navigator.pop(context);}
-          },child:Text(busy?'Please wait…':'Submit for verification'))),
+          },child:Text(tr(context,busy?'Please wait…':'Submit for verification')))),
           const SizedBox(height:8),
           const Text('Your rent balance will update after the owner verifies actual bank credit.',
             style:TextStyle(fontSize:11,color:muted)),
@@ -357,7 +426,7 @@ class PaymentsPage extends StatelessWidget {
           ]),
           style:const TextStyle(fontWeight:FontWeight.w900,
           fontSize:22))),
-          StatusPill('${p['status']}')
+          StatusPill(p['status']=='pending'?'Verification pending':'${p['status']}')
         ]),
         const SizedBox(height:10),
         Text(app.owner?'${app.find('residents',p['resident_id']as int)?['name']??'Resident'}':'Reference: ${p['reference']}',
@@ -366,6 +435,36 @@ class PaymentsPage extends StatelessWidget {
         Text('${p['reference']} · ${p['created_at']}',
         style:const TextStyle(color:muted,
         fontSize:10)),
+        if(app.owner&&p['status']=='rejected')
+          Padding(padding:const EdgeInsets.only(top:8),
+            child:Text(tr(context,'Awaiting corrected proof from resident'),
+              style:const TextStyle(color:Color(0xFFA92842),fontWeight:FontWeight.w700,fontSize:12))),
+        if(!app.owner&&p['status']=='rejected')
+          Padding(padding:const EdgeInsets.only(top:8),
+            child:Text(tr(context,'Proof rejected — submit the correct proof'),
+              style:const TextStyle(color:Color(0xFFA92842),fontWeight:FontWeight.w700,fontSize:12))),
+        if(!app.owner&&p['status']=='pending')
+          Padding(padding:const EdgeInsets.only(top:8),
+            child:Text(tr(context,'Awaiting owner verification'),
+              style:const TextStyle(color:Color(0xFF9A5200),fontWeight:FontWeight.w700,fontSize:12))),
+        if(app.owner)...[
+          const SizedBox(height:8),
+          if(p['risk_level']=='review_required' && p['status']=='approved' && p['risk_acknowledged']==true)
+            Text(tr(context,'Approved after risk review'),style:const TextStyle(color:Color(0xFF9A5200),fontWeight:FontWeight.w700,fontSize:12))
+          else if(p['risk_level']=='review_required')
+            Row(children:[
+              const Icon(Icons.warning_amber_rounded,size:17,color:Color(0xFF9A5200)),
+              const SizedBox(width:6),
+              Expanded(child:Text(tr(context,'Risk review required'),
+                style:const TextStyle(color:Color(0xFF9A5200),fontWeight:FontWeight.w800,fontSize:12)))
+            ])
+          else if(p['risk_level']=='not_analyzed'||p['analysis_status']==null)
+            Text(tr(context,'Proof analysis not available for this record'),
+              style:const TextStyle(color:muted,fontSize:11))
+          else
+            Text(tr(context,'Document authenticity not verified'),
+              style:const TextStyle(color:muted,fontSize:11)),
+        ],
         if('${p['reason']??''}'.isNotEmpty)Text('${p['reason']}',
         style:const TextStyle(color:muted,
         fontSize:11))
@@ -381,8 +480,17 @@ class PaymentsPage extends StatelessWidget {
   final int id;
   @override State<PaymentDetailPage> createState()=>_PaymentDetailPageState();
 } class _PaymentDetailPageState extends State<PaymentDetailPage>{
+  @override void initState(){
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if(!mounted)return;
+      try { await AppScope.of(context).refresh(); }
+      catch (_) { if(mounted)feedback(context,'Unable to refresh payment details.'); }
+    });
+  }
   bool busy=false,
-  confirmed=false;
+  confirmed=false,
+  riskAcknowledged=false;
   final reason=TextEditingController();
   @override void dispose(){
     reason.dispose();
@@ -391,6 +499,9 @@ class PaymentsPage extends StatelessWidget {
     if(decision=='approved'&&!confirmed){
       feedback(context,
       'Confirm the bank credit first.');
+      return;
+    }if(decision=='approved' && AppScope.of(context).find('payments',widget.id)?['risk_level']=='review_required' && !riskAcknowledged){
+      feedback(context,'Review the flagged proof and acknowledge its risks before approval.');
       return;
     }if(decision=='rejected'&&reason.text.trim().length<3){
       feedback(context,
@@ -404,6 +515,7 @@ class PaymentsPage extends StatelessWidget {
     body:{
       'decision':decision,
       'bank_confirmed':confirmed,
+      'risk_acknowledged':riskAcknowledged,
       'reason':reason.text.trim()
     }),
     success:'Payment reviewed');
@@ -425,7 +537,7 @@ class PaymentsPage extends StatelessWidget {
       detail:'Reference · ${p['reference']}'),
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
-        StatusPill('${p['status']}'),
+        StatusPill(p['status']=='pending'?'Verification pending':'${p['status']}'),
         const SizedBox(height:10),
         if(app.owner) Container(
           width:double.infinity,
@@ -436,12 +548,25 @@ class PaymentsPage extends StatelessWidget {
             Text(tr(context,'Authenticity not verified'),
               style:const TextStyle(fontWeight:FontWeight.bold)),
             const SizedBox(height:5),
-            Text((p['risk_flags'] as List? ?? []).isEmpty
-              ? tr(context,'No flags found')
-              : (p['risk_flags'] as List).join(' • ')),
+            Text(p['risk_level']=='not_analyzed'||p['analysis_status']==null
+              ? tr(context,'Proof analysis not available for this record')
+              : (p['risk_flags'] as List? ?? []).isEmpty
+                ? tr(context,'No flags found')
+                : (p['risk_flags'] as List).map((item)=>tr(context,'$item')).join(' • ')),
+            const SizedBox(height:5),
+            Text('${tr(context,'Analysis status')}: ${p['analysis_status']??'not_analyzed'}',
+              style:const TextStyle(fontSize:11,color:muted)),
             const SizedBox(height:5),
             Text(tr(context,'Check bank credit before approval'),
               style:const TextStyle(fontSize:12)),
+            const SizedBox(height:5),
+            Text(tr(context,'AI origin cannot be confirmed from this file.'),
+              style:const TextStyle(fontSize:11)),
+            if((p['review_notes'] as List? ?? []).isNotEmpty) ...[
+              const SizedBox(height:5),
+              Text((p['review_notes'] as List).map((item)=>tr(context,'$item')).join(' • '),
+                style:const TextStyle(fontSize:11)),
+            ],
           ])),
 
         if(p[
@@ -451,14 +576,18 @@ class PaymentsPage extends StatelessWidget {
           'file_id'
         ]as int),
         icon:const Icon(Icons.attachment),
-        label:const Text('View payment proof')),
-        if('${p['reason']??''}'.isNotEmpty)Text('Review note: ${p['reason']}'),
+        label:Text(tr(context,'View payment proof'))),
+        if(p['status']=='rejected')
+          Padding(padding:const EdgeInsets.only(top:8),
+            child:Text(tr(context,'Proof rejected — submit the correct proof'),
+              style:const TextStyle(fontWeight:FontWeight.w700,color:Color(0xFFA92842)))),
+        if('${p['reason']??''}'.isNotEmpty)Text('${tr(context,'Review note')}: ${p['reason']}'),
         if(p[
           'status'
         ]=='approved')FilledButton(onPressed:()=>openPage(context,
         'receipt',
         id:widget.id),
-        child:const Text('View receipt'))
+        child:Text(tr(context,'View receipt')))
       ])),
       if(app.profile[
         'role'
@@ -467,16 +596,21 @@ class PaymentsPage extends StatelessWidget {
       ]=='pending')Surface(child:Column(children:[
         CheckboxListTile(value:confirmed,
         onChanged:(v)=>setState(()=>confirmed=v??false),
-        title:const Text('I have confirmed the credit in the bank / UPI statement.',
-        style:TextStyle(fontSize:12))),
+        title:Text(tr(context,'I have confirmed the credit in the bank / UPI statement.'),
+        style:const TextStyle(fontSize:12))),
+        if(p['risk_level']=='review_required')
+          CheckboxListTile(value:riskAcknowledged,
+            onChanged:(v)=>setState(()=>riskAcknowledged=v??false),
+            title:Text(tr(context,'I reviewed the risk flags and verified the payment independently.'),
+              style:const TextStyle(fontSize:12))),
         FilledButton(onPressed:busy?null:()=>review('approved'),
-        child:const Text('Approve payment')),
+        child:Text(tr(context,'Approve payment'))),
         const SizedBox(height:20),
         TextField(controller:reason,
-        decoration:const InputDecoration(labelText:'Reason for rejection')),
+        decoration:InputDecoration(labelText:tr(context,'Reason for rejection'))),
         const SizedBox(height:12),
         OutlinedButton(onPressed:busy?null:()=>review('rejected'),
-        child:const Text('Reject proof'))
+        child:Text(tr(context,'Reject proof')))
       ]))
     ]);
   }

@@ -176,7 +176,7 @@ String indiaTime(dynamic value){
   end:Alignment.bottomRight)),
   child:Column(crossAxisAlignment:CrossAxisAlignment.start,
   children:[
-    Row(children:[Expanded(child:Text(label,
+    Row(children:[Expanded(child:Text(tr(context,label),
     style:const TextStyle(color:Color(0xFFF2DDF4),
     fontSize:12))),if(trailing!=null)trailing!]),
     const SizedBox(height:10),
@@ -185,7 +185,7 @@ String indiaTime(dynamic value){
     color:Colors.white,
     fontWeight:FontWeight.w900)),
     if(detail.isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),
-    child:Text(detail,
+    child:Text(tr(context,detail),
     style:const TextStyle(color:Colors.white70,
     fontSize:12))),
     if(child!=null)...[
@@ -240,7 +240,7 @@ String indiaTime(dynamic value){
     color:lavender,
     size:38),
     const SizedBox(height:12),
-    Text(message,
+    Text(tr(context,message),
     textAlign:TextAlign.center,
     style:const TextStyle(color:muted)),
     if(action!=null)...[
@@ -253,18 +253,18 @@ Future<bool> ask(BuildContext context, String text) async {
   final result = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Please confirm'),
-      content: Text(text),
+      title: Text(tr(dialogContext,'Please confirm'),),
+      content: Text(tr(dialogContext,text)),
       actionsPadding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
       actions: [
         Row(children: [
           Expanded(child: OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'))),
+            child: Text(tr(dialogContext,'Cancel')))),
           const SizedBox(width: 12),
           Expanded(child: FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Confirm'))),
+            child: Text(tr(dialogContext,'Confirm')))),
         ]),
       ],
     ),

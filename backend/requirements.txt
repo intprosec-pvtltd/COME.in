@@ -8,3 +8,6 @@ PyJWT>=2.9,<3
 pwdlib[argon2]>=0.2,<1
 
 python-multipart>=0.0.20,<1
+
+# V31 visually similar document detection (CPU, no cloud AI API)
+Pillow>=11.0,<13

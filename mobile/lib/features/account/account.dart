@@ -59,7 +59,7 @@ class AccountPage extends StatelessWidget {
         if(context.mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
       },
       icon:const Icon(Icons.logout),
-      label:const Text('Log out')),
+      label:Text(tr(context,'Log out'))),
       const Attribution()
     ]);
   }

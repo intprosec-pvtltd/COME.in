@@ -1,3 +1,4 @@
+import '../core/localization.dart';
 import 'package:flutter/material.dart';
 import 'controller.dart';
 import '../core/design.dart';
@@ -184,14 +185,14 @@ class AppShell extends StatefulWidget {
         'complaints'=>Icons.handyman_outlined,
         _=>Icons.person_outline
       }),
-      label:switch(route){
+      label:tr(context,switch(route){
         'home'=>'Home',
         'tools'=>owner?'Manage':'Explore',
         'reports'=>'Reports',
         'community'=>'Community',
         'complaints'=>'Tasks',
         _=>owner?'Account':'Profile'
-      })
+      }))
     ]));
   }
 }

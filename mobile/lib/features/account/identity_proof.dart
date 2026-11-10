@@ -233,6 +233,14 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         const SizedBox(height:5),
         Text(tr(context,'Not a government verification'),
           style:const TextStyle(fontSize:11)),
+        const SizedBox(height: 5),
+        Text('AI origin: not conclusively determined',
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+        if ((proof['review_notes'] as List? ?? []).isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text((proof['review_notes'] as List).join(' • '),
+            style: const TextStyle(fontSize: 11)),
+        ],
       ]),
     );
   }

@@ -142,56 +142,52 @@ class SignInScreen extends StatefulWidget {
   } @override Widget build(BuildContext context)=>_AuthScaffold(
     backgroundAsset:'assets/auth/login_background.png',
     topSpace:260,
-    fixedWhenKeyboardClosed: false,
     builder:(context,limits,keyboardOpen){
-      // The keyboard reduces limits.maxHeight. Never use Expanded/Flexible in
-      // the scrolling auth content: it caused the 317px overflow on Android.
       return Column(mainAxisSize:MainAxisSize.min,children:[
-        // Keep the same brand, welcome heading and fields with or without the
-        // keyboard, just as on owner registration. The shared scroll viewport
-        // handles reduced keyboard space instead of swapping the whole header.
-        const SizedBox(height: 5),
-        const SizedBox(width:220,child:LanguagePicker()),
-        const SizedBox(height:8),
         const _AuthBrand(),
-        const SizedBox(height: 16),
-        Text(tr(context,'Welcome back!'), textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: plum)),
-        const SizedBox(height: 2),
-        Text(tr(context,'Same spaces. Brighter days.'), textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: Color(0xFF84718B))),
-        const SizedBox(height: 12),
+        const SizedBox(height:8),
+        Text(tr(context,'Welcome back!'),textAlign:TextAlign.center,
+          softWrap:true,
+          style:const TextStyle(fontSize:29,fontWeight:FontWeight.w900,height:1.12,color:plum)),
+        const SizedBox(height:4),
+        Text(tr(context,'Same spaces. Brighter days.'),textAlign:TextAlign.center,
+          style:const TextStyle(fontSize:14,color:Color(0xFF84718B))),
+        const SizedBox(height:12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
           _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
-            autofillHints:const [AutofillHints.username],
-            textInputAction:TextInputAction.next,
+            autofillHints:const [AutofillHints.username],textInputAction:TextInputAction.next,
             decoration:InputDecoration(hintText:tr(context,'Email or Phone'),prefixIcon:const Icon(Icons.mail_outline)),
-            validator:(v)=>v==null||(!v.contains('@')&&!RegExp(r'^\+?[0-9 ]{7,18}$').hasMatch(v))?'Enter your email or phone':null)),
+            validator:(v)=>v==null||(!v.contains('@')&&!RegExp(r'^\+?[0-9 ]{7,18}$').hasMatch(v))?tr(context,'Enter your email or phone'):null)),
           const SizedBox(height:10),
           _AuthField(child:TextFormField(controller:password,obscureText:hidden,
-            autofillHints:const [AutofillHints.password],
-            textInputAction:TextInputAction.done,
+            autofillHints:const [AutofillHints.password],textInputAction:TextInputAction.done,
             decoration:InputDecoration(hintText:tr(context,'Password'),prefixIcon:const Icon(Icons.lock_outline),
               suffixIcon:IconButton(tooltip:hidden?'Show password':'Hide password',
                 onPressed:()=>setState(()=>hidden=!hidden),icon:Icon(hidden?Icons.visibility_outlined:Icons.visibility_off_outlined))),
-            validator:(v)=>v==null||v.isEmpty?'Enter your password':null,onFieldSubmitted:(_)=>login())),
-          const SizedBox(height:5),
-          Row(children:[
-            SizedBox(width:32,height:36,child:Checkbox(value:remember,activeColor:plum,
-              onChanged:(v)=>setState(()=>remember=v??false))),
-            Expanded(child:Text(tr(context,'Keep me signed in'),style:TextStyle(fontSize:12,color:Color(0xFF76657C)))),
-            TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RecoveryScreen())),
-              child:Text(tr(context,'Forgot password?'),style:TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:plum)))
-          ]),
-          if(error!=null)Padding(padding:const EdgeInsets.only(bottom:5),child:Text(error!,style:const TextStyle(color:Colors.red,fontSize:12))),
+            validator:(v)=>v==null||v.isEmpty?tr(context,'Enter your password'):null,onFieldSubmitted:(_)=>login())),
           const SizedBox(height:6),
+          // Independent rows give every language enough horizontal room.
+          // Long Tamil/Malayalam translations no longer collapse into letters.
+          Row(children:[
+            SizedBox(width:36,height:40,child:Checkbox(value:remember,activeColor:plum,
+              onChanged:(v)=>setState(()=>remember=v??false))),
+            const SizedBox(width:5),
+            Expanded(child:Text(tr(context,'Keep me signed in'),
+              maxLines:2,softWrap:true,
+              style:const TextStyle(fontSize:13,color:Color(0xFF76657C)))),
+          ]),
+          Align(alignment:Alignment.centerRight,child:TextButton(
+            onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RecoveryScreen())),
+            child:Text(tr(context,'Forgot password?'),textAlign:TextAlign.end,
+              style:const TextStyle(fontSize:13,fontWeight:FontWeight.w700,color:plum)))),
+          if(error!=null)Padding(padding:const EdgeInsets.only(bottom:5),child:Text(error!,style:const TextStyle(color:Colors.red,fontSize:12))),
+          const SizedBox(height:5),
           _AuthPrimary(label:tr(context,'Sign in'),busy:busy,onPressed:login),
         ])),
-        const SizedBox(height:3),
+        const SizedBox(height:5),
         TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RegistrationScreen())),
-          child:Text(tr(context,'Create account'),style:TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
-        // Keep the original footer in the scroll content. It can be reached
-        // by scrolling while the keyboard is open, without obscuring fields.
+          child:Text(tr(context,'Create account'),textAlign:TextAlign.center,
+            style:const TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
         const _AuthSocialInfo(),
         const _AuthWhiteFooter(),
       ]);
@@ -224,7 +220,7 @@ class SignInScreen extends StatefulWidget {
     super.dispose();
   } Future<void> submit()async{
     if(!form.currentState!.validate()||!terms){
-      setState(()=>error='Complete the required fields and accept the terms.');
+      setState(()=>error=tr(context,'Complete the required fields and accept the terms.'));
       return;
     }setState(()=>busy=true);
     try{
@@ -236,7 +232,7 @@ class SignInScreen extends StatefulWidget {
       });
       if(mounted){
         feedback(context,
-        'Account created. You can now sign in.');
+        tr(context,'Account created. You can now sign in.'));
         Navigator.pop(context);
       }
     }catch(e){
@@ -247,42 +243,50 @@ class SignInScreen extends StatefulWidget {
   } @override Widget build(BuildContext context)=>_AuthScaffold(
   backgroundAsset:'assets/auth/signup_background.png',
   topSpace:265,
-  child:Column(children:[
-    const SizedBox(height:8),
+  builder:(context,limits,keyboardOpen)=>Column(mainAxisSize:MainAxisSize.min,children:[
     const _AuthBrand(),
-    const SizedBox(height:9),
-    const SizedBox(height:11),
-    const Text('Create your account',textAlign:TextAlign.center,style:TextStyle(fontSize:29,fontWeight:FontWeight.w900,color:plum)),
-    const SizedBox(height:3),
-    const Text('Join your space. Start your stay.',style:TextStyle(fontSize:15,color:Color(0xFF84718B),fontStyle:FontStyle.italic)),
-    const SizedBox(height:14),
-    Form(key:form,child:Column(children:[
+    const SizedBox(height:8),
+    // No opaque card behind the registration headline: retain artwork.
+    Text(tr(context,'Create your account'),textAlign:TextAlign.center,
+      softWrap:true,style:const TextStyle(fontSize:28,fontWeight:FontWeight.w900,height:1.14,color:plum)),
+    const SizedBox(height:5),
+    Text(tr(context,'Join your space. Start your stay.'),textAlign:TextAlign.center,
+      style:const TextStyle(fontSize:14,color:Color(0xFF84718B),fontStyle:FontStyle.italic)),
+    const SizedBox(height:12),
+    Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
       for(final key in ['name','email','phone','password','property_name']) ...[
         _AuthField(child:TextFormField(controller:controls[key],obscureText:key=='password',
           keyboardType:key=='phone'?TextInputType.phone:key=='email'?TextInputType.emailAddress:TextInputType.text,
+          textInputAction:TextInputAction.next,
           decoration:InputDecoration(
-            prefixIcon:Icon(key=='name'?Icons.person_outline:key=='password'?Icons.lock_outline:key=='phone'?Icons.phone_outlined:key=='joining_code'?Icons.key_outlined:key=='property_name'?Icons.home_outlined:Icons.mail_outline),
-            hintText:{'name':'Full Name','email':'Email','phone':'Phone Number','password':'Password','property_name':'Property Name','joining_code':'PG Joining Code'}[key],
+            prefixIcon:Icon(key=='name'?Icons.person_outline:key=='password'?Icons.lock_outline:key=='phone'?Icons.phone_outlined:key=='property_name'?Icons.home_outlined:Icons.mail_outline),
+            hintText:tr(context,{'name':'Full Name','email':'Email','phone':'Phone Number','password':'Password','property_name':'Property Name'}[key]!),
             suffixIcon:key=='password'?const Icon(Icons.lock_reset_outlined,size:18):null),
-          validator:(v)=>v==null||v.trim().isEmpty?'Required':key=='password'&&v.length<8?'Use at least 8 characters':key=='email'&&!v.contains('@')?'Enter a valid email':null)),
+          validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'&&!v.contains('@')?tr(context,'Enter a valid email'):null)),
         const SizedBox(height:10),
       ],
       _AuthField(child:TextFormField(controller:confirmPassword,obscureText:true,
-        decoration:const InputDecoration(hintText:'Confirm Password',prefixIcon:Icon(Icons.lock_outline)),
-        validator:(v)=>v!=controls['password']!.text?'Passwords do not match':null)),
-      const SizedBox(height:12),
-      const Padding(padding:EdgeInsets.symmetric(vertical:9),child:Text('Registration is for PG owners. Residents receive their sign-in details from the owner.',textAlign:TextAlign.center,style:TextStyle(fontSize:12,color:Color(0xFF806C86)))),
-      const SizedBox(height:12),
+        textInputAction:TextInputAction.done,
+        decoration:InputDecoration(hintText:tr(context,'Confirm Password'),prefixIcon:const Icon(Icons.lock_outline)),
+        validator:(v)=>v!=controls['password']!.text?tr(context,'Passwords do not match'):null)),
+      const SizedBox(height:10),
+      Padding(padding:const EdgeInsets.symmetric(vertical:8),
+        child:Text(tr(context,'Registration is for PG owners. Residents receive their sign-in details from the owner.'),
+          textAlign:TextAlign.center,style:const TextStyle(fontSize:12,color:Color(0xFF806C86)))),
+      // The checkbox label expands across the screen; it never goes under the
+      // Android navigation area because _AuthScaffold scrolls with safe insets.
       CheckboxListTile(contentPadding:EdgeInsets.zero,controlAffinity:ListTileControlAffinity.leading,
         activeColor:plum,value:terms,onChanged:(v)=>setState(()=>terms=v??false),
-        title:const Text('I agree to the Terms & Conditions and privacy policy',style:TextStyle(fontSize:12,color:plum))),
+        title:Text(tr(context,'I agree to the Terms & Conditions and privacy policy'),
+          softWrap:true,style:const TextStyle(fontSize:12,color:plum))),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:8),child:Text(error!,style:const TextStyle(color:Colors.red,fontSize:12))),
       const SizedBox(height:10),
-      _AuthPrimary(label:'Create account',busy:busy,onPressed:submit),
+      _AuthPrimary(label:tr(context,'Create account'),busy:busy,onPressed:submit),
     ])),
     const SizedBox(height:11),
-    TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Already have an account? Sign in',
-      style:TextStyle(color:plum,fontWeight:FontWeight.w700))),
+    TextButton(onPressed:()=>Navigator.pop(context),
+      child:Text(tr(context,'Already have an account? Sign in'),textAlign:TextAlign.center,
+        style:const TextStyle(color:plum,fontWeight:FontWeight.w700))),
     const SizedBox(height:10),
     const _AuthWhiteFooter(),
   ]));
@@ -435,14 +439,12 @@ class _AuthScaffold extends StatelessWidget {
     this.builder,
     required this.backgroundAsset,
     required this.topSpace,
-    this.fixedWhenKeyboardClosed = false,
   }) : assert(child != null || builder != null);
 
   final Widget? child;
   final Widget Function(BuildContext, BoxConstraints, bool)? builder;
   final String backgroundAsset;
   final double topSpace;
-  final bool fixedWhenKeyboardClosed;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -496,7 +498,7 @@ class _AuthScaffold extends StatelessWidget {
               16,
               top + safeTop,
               16,
-              safeBottom + 36,
+              safeBottom + 76,
             ),
             child: Center(
               child: ConstrainedBox(

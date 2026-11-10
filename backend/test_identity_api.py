@@ -5,6 +5,7 @@ import io
 import os
 import importlib
 import tempfile
+import sys
 from pathlib import Path
 
 def test_resident_proof_is_tenant_scoped(monkeypatch):
@@ -12,6 +13,9 @@ def test_resident_proof_is_tenant_scoped(monkeypatch):
         monkeypatch.setenv('DATABASE_URL', 'sqlite:///' + str(Path(tmp) / 'test.db'))
         monkeypatch.setenv('SECRET_KEY', 'test-only-do-not-use-in-production')
         monkeypatch.setenv('DEMO_SEED', 'false')
+        # Isolate FastAPI/SQLAlchemy global engine between temporary DB tests.
+        for name in ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api'):
+            sys.modules.pop(name, None)
         from fastapi.testclient import TestClient
         import main
         from main import SessionLocal, Tenant, User, passwords

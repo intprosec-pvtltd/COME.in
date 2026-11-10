@@ -268,6 +268,16 @@ def transfer_room(resident_id:int,data:RoomTransferInput,u:User=Depends(current)
  commit(s)
  return {'ok':True,'allocation':target}
 
+def payment_risk_out(s:Session, tenant_id:int, payment:Payment)->dict:
+ """Read-only risk summary; old records are explicitly marked not analyzed."""
+ md=meta(s,tenant_id,'payment_meta',payment.id)
+ if 'analysis_status' not in md and 'risk_level' not in md:
+  return {**md, 'risk_acknowledged':bool(md.get('risk_acknowledged',False)), 'risk_level':'not_analyzed', 'analysis_status':'legacy_not_analyzed',
+          'risk_flags':[], 'review_notes':['This submission predates document analysis or has no stored analysis. Verify bank credit independently.'],
+          'authenticity_verified':False}
+ return {'risk_acknowledged':False,'risk_level':'unverified','analysis_status':'not_requested','risk_flags':[],
+         'review_notes':[], 'authenticity_verified':False, **md}
+
 @router.get('/state')
 def state(u:User=Depends(current),s:Session=Depends(db)):
  role(u,'owner','manager','resident','staff');is_owner=u.role in ('owner','manager')
@@ -281,7 +291,7 @@ def state(u:User=Depends(current),s:Session=Depends(db)):
  t=s.get(Tenant,u.tenant_id)
  resident_property=meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0)
  accommodation_property=next((p['name'] for p in property_rows(s,u) if p['id']==resident_property),t.name)
- return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**meta(s,u.tenant_id,'payment_meta',p.id)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':[dict(id=m.id,day=m.day,breakfast=m.breakfast,lunch=m.lunch,dinner=m.dinner) for m in s.scalars(select(Meal).where(Meal.tenant_id==u.tenant_id))],'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[{'id':r.id,'name':r.name,'role':r.role} for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))],'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner)],'payment_methods':{'upi_id':t.upi_id,'bank_holder':t.bank_holder,'bank_name':t.bank_name,'bank_account_masked':'****'+t.bank_account[-4:] if t.bank_account else '', 'ifsc':t.ifsc,'qr_image_url':t.qr_image_url,'qr_file_id':meta(s,u.tenant_id,'owner_payment_qr','current').get('file_id')},'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
+ return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':[dict(id=m.id,day=m.day,breakfast=m.breakfast,lunch=m.lunch,dinner=m.dinner) for m in s.scalars(select(Meal).where(Meal.tenant_id==u.tenant_id))],'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[{'id':r.id,'name':r.name,'role':r.role} for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))],'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner)],'payment_methods':{'upi_id':t.upi_id,'bank_holder':t.bank_holder,'bank_name':t.bank_name,'bank_account_masked':'****'+t.bank_account[-4:] if t.bank_account else '', 'ifsc':t.ifsc,'qr_image_url':t.qr_image_url,'qr_file_id':meta(s,u.tenant_id,'owner_payment_qr','current').get('file_id')},'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
 
 class PropertyInput(BaseModel):
  name:str=Field(min_length=2,max_length=120)
@@ -437,30 +447,37 @@ class ProofInput(BaseModel):
 def payment(data:ProofInput,u:User=Depends(current),s:Session=Depends(db)):
  role(u,'resident');i=tenant_get(s,Invoice,data.invoice_id,u.tenant_id)
  if i.resident_id!=u.id:raise HTTPException(403,'Not your invoice')
- if data.amount>i.amount-i.paid:raise HTTPException(409,'Amount exceeds balance')
+ pending_total=sum((q.amount for q in s.scalars(select(Payment).where(
+  Payment.tenant_id==u.tenant_id,Payment.invoice_id==i.id,Payment.status=='pending'))),Decimal('0'))
+ if data.amount>i.amount-i.paid-pending_total:raise HTTPException(409,'Amount exceeds balance after pending verification')
  reference=(data.reference or '').strip() or 'PROOF-'+uuid.uuid4().hex.upper()[:20]
  if len(reference)<6:raise HTTPException(422,'Invalid reference')
  if s.scalar(select(Payment).where(Payment.tenant_id==u.tenant_id,Payment.reference==reference,Payment.status!='rejected')):raise HTTPException(409,'Reference already submitted')
  safe_file(s,u,data.file_id,'payment')
  from risk_checks import inspect_file
- risk={'risk_level':'unverified','risk_flags':['No proof attached'], 'authenticity_verified':False}
+ risk={'risk_level':'review_required','risk_flags':['No proof attached'], 'analysis_status':'not_requested', 'authenticity_verified':False, 'ai_generated_verified':False}
  if data.file_id:
   f=tenant_get(s,PrivateFile,data.file_id,u.tenant_id)
   raw=(STORAGE/f.key).read_bytes() if (STORAGE/f.key).is_file() else b''
   # Compare submitted payment file fingerprints within the same PG tenant.
-  known=[meta(s,u.tenant_id,'payment_meta',q.id).get('sha256') for q in s.scalars(
-   select(Payment).where(Payment.tenant_id==u.tenant_id,Payment.status!='rejected'))]
-  risk=inspect_file(raw,f.mime,filter(None,known))
+  previous=[meta(s,u.tenant_id,'payment_meta',q.id) for q in s.scalars(
+   select(Payment).where(Payment.tenant_id==u.tenant_id).order_by(Payment.id.desc()).limit(100))]
+  known=[item.get('sha256') for item in previous]
+  visual=[item.get('visual_hash') for item in previous]
+  risk=inspect_file(raw,f.mime,filter(None,known),
+       known_visual_hashes=filter(None,visual),document_kind='payment',
+       expected_amount=data.amount,expected_reference=reference)
   if not raw:
    risk['risk_flags'].append('Uploaded payment proof was not accessible for analysis')
    risk['risk_level']='review_required'
  p=Payment(tenant_id=u.tenant_id,resident_id=u.id,invoice_id=i.id,amount=data.amount,reference=reference);s.add(p);s.flush()
  put(s,u.tenant_id,'payment_meta',p.id,{'file_id':data.file_id,**risk})
- alert(s,u,'Payment submitted',f'{u.name}: {data.amount}','payments',audience='owners');commit(s);return {'id':p.id}
+ alert(s,u,'Payment submitted',f'{u.name}: {data.amount}','payments',audience='owners');commit(s);return {'id':p.id,'risk_level':risk['risk_level'],'analysis_status':risk.get('analysis_status','not_requested')}
 class Review(BaseModel):
  decision:str=Field(pattern='^(approved|rejected)$')
  reason:str=''
  bank_confirmed:bool=False
+ risk_acknowledged:bool=False
 @router.post('/payments/{identifier}/review')
 def review(identifier:int,data:Review,u:User=Depends(current),s:Session=Depends(db)):
  role(u,'owner');p=s.scalar(select(Payment).where(Payment.id==identifier,Payment.tenant_id==u.tenant_id).with_for_update())
@@ -468,11 +485,13 @@ def review(identifier:int,data:Review,u:User=Depends(current),s:Session=Depends(
  if p.status!='pending':raise HTTPException(409,'Payment already reviewed')
  i=s.scalar(select(Invoice).where(Invoice.id==p.invoice_id,Invoice.tenant_id==u.tenant_id).with_for_update())
  if data.decision=='approved':
+  if payment_risk_out(s,u.tenant_id,p).get('risk_level')=='review_required' and not data.risk_acknowledged:
+   raise HTTPException(422,'Risk flags must be reviewed and acknowledged before approval')
   if not data.bank_confirmed:raise HTTPException(422,'Confirm bank credit first')
   if i.paid+p.amount>i.amount:raise HTTPException(409,'Payment exceeds the remaining balance')
   i.paid+=p.amount
  elif len(data.reason.strip())<3:raise HTTPException(422,'Give a rejection reason')
- p.status=data.decision;md=meta(s,u.tenant_id,'payment_meta',p.id);md.update(reason=data.reason,reviewed_by=u.id,reviewed_at=iso(now()));put(s,u.tenant_id,'payment_meta',p.id,md);alert(s,u,'Payment '+p.status,data.reason or str(p.amount),'rent',user_id=p.resident_id);audit(s,u,'payment_review',{'id':p.id,'decision':p.status});commit(s);return {'ok':True}
+ p.status=data.decision;md=meta(s,u.tenant_id,'payment_meta',p.id);md.update(reason=data.reason,reviewed_by=u.id,reviewed_at=iso(now()),risk_acknowledged=bool(data.risk_acknowledged) if data.decision=='approved' else False);put(s,u.tenant_id,'payment_meta',p.id,md);alert(s,u,'Payment '+p.status,data.reason or str(p.amount),'rent',user_id=p.resident_id);audit(s,u,'payment_review',{'id':p.id,'decision':p.status});commit(s);return {'ok':True}
 @router.post('/read/{kind}/{identifier}')
 def read_item(kind:str,identifier:int,u:User=Depends(current),s:Session=Depends(db)):
  if kind not in ('notice','alert'):raise HTTPException(404,'Unknown type')

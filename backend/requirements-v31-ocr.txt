@@ -1,0 +1,6 @@
+# Optional CPU OCR stack; install with: pip install -r requirements-v31-ocr.txt
+# Set COMEIN_V31_OCR_ENABLED=true only after Tesseract executable is installed.
+-r requirements.txt
+pypdf>=5.0,<7
+pypdfium2>=4.25,<6
+pytesseract>=0.3.13,<1
