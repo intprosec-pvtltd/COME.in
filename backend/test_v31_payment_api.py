@@ -13,8 +13,11 @@ def test_invoice_mismatch_is_advisory_and_bank_gate_remains(monkeypatch):
         monkeypatch.setenv('DATABASE_URL', 'sqlite:///' + str(Path(tmp) / 'test.db'))
         monkeypatch.setenv('SECRET_KEY', 'test-only-payment-v31-secret-longer-than-32bytes')
         monkeypatch.setenv('DEMO_SEED', 'false')
-        # Isolate FastAPI/SQLAlchemy global engine between temporary DB tests.
-        for name in ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api'):
+        # Preserve modules imported at pytest collection time (e.g. test_v3.py).
+        # This test temporarily imports a separate FastAPI/SQLite app.
+        _isolation_names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api')
+        _prior_modules = {name: sys.modules.get(name) for name in _isolation_names}
+        for name in _isolation_names:
             sys.modules.pop(name, None)
         from fastapi.testclient import TestClient
         import main
@@ -89,3 +92,10 @@ def test_invoice_mismatch_is_advisory_and_bank_gate_remains(monkeypatch):
             client.close()
             risk_checks._ocr_text = old_ocr
             main.engine.dispose()
+            # Restore the previous module objects so other collected tests keep
+            # their original database engine, routes and monkeypatch targets.
+            for _name, _previous in _prior_modules.items():
+                if _previous is None:
+                    sys.modules.pop(_name, None)
+                else:
+                    sys.modules[_name] = _previous

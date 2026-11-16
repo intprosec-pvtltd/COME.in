@@ -73,3 +73,27 @@ label{color:#65526e;font-size:12px}input,select,textarea{border-color:#ded7e7;bo
 .sidebar .attribution img{background:transparent!important;border-radius:0!important;box-shadow:none!important;padding:0!important;width:177px;height:auto;max-height:49px;max-width:calc(100% - 32px);object-fit:contain;filter:drop-shadow(0 1px 2px #0005)}
 @media(max-width:1100px){.sidebar{width:252px;flex-basis:252px}.sidebar-app-icon{width:43px;height:43px;flex-basis:43px}.sidebar-brand-copy strong{font-size:20px}.sidebar-signout{min-width:66px;padding:6px}}
 @media(max-width:850px){.sidebar{left:-285px}.sidebar.show{left:0}}
+
+/* COME.in Admin Profile / User Management additions */
+.profile-heading{display:flex;gap:16px;align-items:center;margin-bottom:25px}.profile-avatar{width:62px;height:62px;font-size:23px;flex:0 0 62px}.profile-heading h3{margin:0 0 3px}.admin-settings h3 svg{vertical-align:middle;margin-right:5px}.user-editor{border-color:#ccb1da;box-shadow:0 10px 32px #4c23561a}.user-editor .form-grid{margin-top:16px}.user-editor .form-actions{align-items:flex-end}.sidebar .nav-item{gap:11px}@media(max-width:780px){.admin-settings{grid-template-columns:1fr}.user-editor .form-grid{grid-template-columns:1fr}}
+
+/* COME.in Admin UX refinement: clickable profile and grouped tenant records */
+.sidebar-brand-copy small,.sidebar .side-caption{display:none}
+.admin-profile-trigger{border:1px solid transparent;color:#fff;text-align:left;cursor:pointer;font:inherit}
+.admin-profile-trigger:hover,.admin-profile-trigger.selected{background:#ffffff20;border-color:#ffffff4d}
+.admin-profile-trigger:focus-visible{outline:2px solid #e9c4ff;outline-offset:2px}
+.admin-filterbar{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:10px 0 5px}
+.admin-filterbar .searchbar{flex:1 1 240px;min-width:185px;margin:0}
+.admin-filterbar>label{flex:0 1 210px;min-width:155px}
+.admin-filterbar select{margin-top:7px}
+.clear-filters{height:43px;white-space:nowrap}
+.results-summary{font-size:12px;color:#80718c;margin:14px 0 18px}
+.account-group .panel-title{margin-bottom:12px;align-items:start}
+.account-group .panel-title h3{margin:0 0 5px}
+.account-group .panel-title .hint{margin:0}
+.count-pill{display:inline-block;background:#f0e7f8;color:#70478b;padding:8px 12px;border-radius:100px;font-size:11px;font-weight:800;white-space:nowrap}
+.invoice-actions{display:flex;flex-direction:column;align-items:stretch;gap:9px;margin-top:19px}
+.invoice-actions label{width:100%;display:block}
+.invoice-actions .invoice-generate{width:100%;min-height:48px;white-space:normal;line-height:1.3;text-align:center}
+.invoice-actions .invoice-hint{margin:2px 0 5px}
+@media(max-width:650px){.admin-filterbar>label{flex:1 1 100%}.admin-filterbar .searchbar{flex:1 1 100%;max-width:none}.clear-filters{width:100%}.account-group .panel-title{flex-wrap:wrap}}

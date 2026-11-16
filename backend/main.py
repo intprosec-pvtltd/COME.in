@@ -111,11 +111,20 @@ app=FastAPI(title='COME.in PG Platform API',version='0.1.0')
 app.add_middleware(CORSMiddleware,allow_origins=os.getenv('CORS_ORIGINS','http://localhost:5173').split(','),allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 def db():
  with SessionLocal() as session: yield session
+def _platform_user_enabled(session, user_id):
+ from sqlalchemy import select as _select
+ table = Base.metadata.tables.get('platform_user_access')
+ if table is None:
+  return True
+ row = session.execute(_select(table.c.is_active).where(table.c.user_id == user_id)).first()
+ return bool(row[0]) if row is not None else True
+
 def current(request:Request,authorization:Optional[str]=Header(None),session:Session=Depends(db)):
  if not authorization or not authorization.startswith('Bearer '):raise HTTPException(401,'Login required')
  try: payload=jwt.decode(authorization[7:],SECRET,algorithms=['HS256']); user=session.get(User,int(payload['sub']))
  except (jwt.PyJWTError,ValueError,KeyError):raise HTTPException(401,'Invalid or expired session')
  if not user or user.tenant_id!=payload.get('tenant'):raise HTTPException(401,'Invalid session')
+ if not _platform_user_enabled(session,user.id):raise HTTPException(403,'Account disabled by platform administrator')
  if 'security_check' in globals():security_check(user,payload,authorization,session)
  if 'meta' in globals():
   onboarding=meta(session,user.tenant_id,'onboarding',user.id)
@@ -137,6 +146,7 @@ def login(data:Credentials,session:Session=Depends(db)):
  u=session.scalar(select(User).where(User.email==data.email.strip().lower()))
  if not u and 'lookup_phone' in globals():u=lookup_phone(session,data.email)
  if not u or not passwords.verify(data.password,u.password_hash):raise HTTPException(401,'Invalid credentials')
+ if not _platform_user_enabled(session,u.id):raise HTTPException(403,'Account disabled by platform administrator')
  if 'meta' in globals():
   onboard=meta(session,u.tenant_id,'onboarding',u.id)
   if onboard.get('must_change') and onboard.get('expires',0)<datetime.now(timezone.utc).timestamp():raise HTTPException(403,'Temporary password expired. Request new access from your PG owner.')

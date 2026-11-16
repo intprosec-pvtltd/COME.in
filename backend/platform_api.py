@@ -42,6 +42,13 @@ class AdminUser(Base):
     is_active: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class PlatformUserAccess(Base):
+    """Additive access overrides; do not mutate the existing mobile User schema."""
+    __tablename__ = 'platform_user_access'
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class PGProperty(Base):
     __tablename__ = 'platform_pg_properties'
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -105,6 +112,25 @@ class AdminAudit(Base):
 class LoginIn(BaseModel):
     email: str
     password: str
+
+
+class AdminProfileIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=160)
+    current_password: str = Field(min_length=1, max_length=256)
+
+
+class AdminPasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class PlatformUserIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=160)
+    role: str = Field(pattern=r'^(owner|manager|resident|staff)$')
+    room: str = Field(default='', max_length=30)
+    is_active: bool
 
 
 class OwnerCreate(BaseModel):
@@ -261,6 +287,93 @@ def platform_me(admin:AdminUser=Depends(_requires_admin)):
     return {'name':admin.name,'email':admin.email}
 
 
+def _profile(admin):
+    return {'id': admin.id, 'name': admin.name, 'email': admin.email, 'is_active': bool(admin.is_active)}
+
+
+def _email(value):
+    address = value.strip().lower()
+    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address):
+        raise HTTPException(422, 'Enter a valid email address')
+    return address
+
+
+@router.get('/profile')
+def admin_profile(admin: AdminUser = Depends(_requires_admin)):
+    return _profile(admin)
+
+
+@router.put('/profile')
+def update_admin_profile(data: AdminProfileIn, admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    if not passwords.verify(data.current_password, admin.password_hash):
+        raise HTTPException(403, 'Current password is incorrect')
+    email = _email(data.email)
+    if s.scalar(select(AdminUser).where(AdminUser.email == email, AdminUser.id != admin.id)):
+        raise HTTPException(409, 'Administrator email already registered')
+    admin.name = data.name.strip()
+    admin.email = email
+    _audit(s, admin, 'update_admin_profile', f'admin:{admin.id}')
+    s.commit()
+    return _profile(admin)
+
+
+@router.post('/profile/password')
+def update_admin_password(data: AdminPasswordIn, admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    if not passwords.verify(data.current_password, admin.password_hash):
+        raise HTTPException(403, 'Current password is incorrect')
+    if data.current_password == data.new_password:
+        raise HTTPException(422, 'Choose a different password')
+    admin.password_hash = passwords.hash(data.new_password)
+    _audit(s, admin, 'change_admin_password', f'admin:{admin.id}')
+    s.commit()
+    # Existing JWTs remain valid until expiry; explicit sign-out is requested in UI.
+    return {'ok': True, 'message': 'Password changed. Please sign in again.'}
+
+
+def _user_out(s, u):
+    access = s.get(PlatformUserAccess, u.id)
+    tenant = s.get(Tenant, u.tenant_id)
+    return {'id': u.id, 'tenant_id': u.tenant_id, 'tenant_name': tenant.name if tenant else '',
+            'name': u.name, 'email': u.email, 'role': u.role, 'room': u.room,
+            'is_active': bool(access.is_active) if access else True}
+
+
+@router.get('/users')
+def list_platform_users(admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    # No password hashes or secrets are returned.
+    return [_user_out(s, u) for u in s.scalars(select(User).order_by(User.id.desc()).limit(1000)).all()]
+
+
+@router.put('/users/{user_id}')
+def update_platform_user(user_id: int, data: PlatformUserIn,
+                         admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    user = s.get(User, user_id)
+    if not user:
+        raise HTTPException(404, 'User not found')
+    email = _email(data.email)
+    if s.scalar(select(User).where(User.email == email, User.id != user.id)):
+        raise HTTPException(409, 'Email already in use')
+    # Preserve at least one usable owner per PG organization.
+    if user.role == 'owner' and (data.role != 'owner' or not data.is_active):
+        others = s.scalars(select(User).where(User.tenant_id == user.tenant_id,
+                                                 User.role == 'owner', User.id != user.id)).all()
+        if not any(_user_out(s, other)['is_active'] for other in others):
+            raise HTTPException(409, 'Cannot remove the last active PG owner')
+    user.name = data.name.strip()
+    user.email = email
+    user.role = data.role
+    user.room = data.room.strip()
+    override = s.get(PlatformUserAccess, user.id)
+    if override is None:
+        override = PlatformUserAccess(user_id=user.id, is_active=int(data.is_active))
+        s.add(override)
+    else:
+        override.is_active = int(data.is_active)
+    _audit(s, admin, 'update_platform_user', f'user:{user.id}/tenant:{user.tenant_id}')
+    s.commit()
+    return _user_out(s, user)
+
+
 @router.get('/overview')
 def platform_overview(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
     tenants=s.scalars(select(Tenant).order_by(Tenant.id)).all()
@@ -287,7 +400,7 @@ def create_owner(data:OwnerCreate, admin:AdminUser=Depends(_requires_admin),s:Se
     s.add(new_owner);s.flush()
     if V3_AVAILABLE:
         # COME.in V14+ recognizes this flag in its first-login password-change flow.
-        v3_put(s,t.id,'onboarding',new_owner.id,{'must_change':True})
+        v3_put(s,t.id,'onboarding',new_owner.id,{'must_change':True, 'expires':(utcnow()+timedelta(hours=72)).timestamp()})
     s.add(Subscription(tenant_id=t.id,price_per_resident=Decimal('39.00'),status='trial'))
     _audit(s,admin,'create_owner',f'tenant:{t.id}')
     s.commit()
@@ -426,4 +539,4 @@ def audit(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
 
 def install_schema():
     # Creates only new tables. Existing tenant/room/resident schemas are untouched.
-    Base.metadata.create_all(engine, tables=[AdminUser.__table__,PGProperty.__table__,RoomAssignment.__table__,ResidentAssignment.__table__,Subscription.__table__,SubscriptionInvoice.__table__,ResidentBillingOverride.__table__,AdminAudit.__table__])
+    Base.metadata.create_all(engine, tables=[AdminUser.__table__,PGProperty.__table__,RoomAssignment.__table__,ResidentAssignment.__table__,Subscription.__table__,SubscriptionInvoice.__table__,ResidentBillingOverride.__table__,AdminAudit.__table__,PlatformUserAccess.__table__])

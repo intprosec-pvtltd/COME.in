@@ -35,15 +35,27 @@ def test_platform_admin_isolated_and_billing(tmp_path, monkeypatch):
     assert p1.status_code==201 and p2.status_code==201
     with main.SessionLocal() as s:
         for i,room in enumerate(['101','102']):s.add(Room(tenant_id=tid,name=room,beds=3))
-        resident=main.User(tenant_id=tid,name='Resident A',email='resident@example.test',password_hash=main.passwords.hash('long-test-password'),role='resident',room='101')
+        resident=main.User(tenant_id=tid,name='Resident A',email='resident@example.test',password_hash=main.passwords.hash('long-test-password'),role='resident',room='')
         s.add(resident);s.commit();rid=resident.id
         rooms=s.query(Room).filter_by(tenant_id=tid).all()
     for room,property_id in zip(rooms,[p1.json()['id'],p2.json()['id']]):
         assert c.put(f'/api/platform/owners/{tid}/properties/{property_id}/rooms/{room.id}',headers=auth).status_code==200
     assert c.put(f'/api/platform/owners/{tid}/properties/{p1.json()["id"]}/residents/{rid}',headers=auth).status_code==200
+    # Put the resident into room 101 only after room/property assignment.
+    # The production API intentionally blocks moving already occupied rooms.
+    with main.SessionLocal() as s:
+        assigned_resident = s.get(main.User, rid)
+        assigned_resident.room = '101'
+        s.commit()
     detail=c.get(f'/api/platform/owners/{tid}',headers=auth).json()
-    assert detail['pg_count']==2 and detail['total_beds']==6 and detail['total_residents']==1
-    assert detail['properties'][0]['beds']==3 and detail['properties'][0]['residents']==1
+    # V3 includes the automatically configured primary property (ID 0).
+    assert detail['pg_count']==3 and detail['total_beds']==6 and detail['total_residents']==1
+    properties_by_id = {p['id']: p for p in detail['properties']}
+    assert 0 in properties_by_id  # Primary property is included in the count.
+    assert properties_by_id[p1.json()['id']]['beds']==3
+    assert properties_by_id[p1.json()['id']]['residents']==1
+    assert properties_by_id[p2.json()['id']]['beds']==3
+    assert properties_by_id[p2.json()['id']]['residents']==0
     assert detail['subscription']['estimated_monthly']=='39.00'
     assert c.post(f'/api/platform/owners/{tid}/invoices',headers=auth,json={'period':'2026-11'}).status_code==409  # trial
     assert c.put(f'/api/platform/owners/{tid}/subscription',headers=auth,json={'price_per_resident':'29.00','status':'active','trial_until':'','billing_notes':'launch offer'}).status_code==200
@@ -55,6 +67,16 @@ def test_platform_admin_isolated_and_billing(tmp_path, monkeypatch):
     paid=c.post(f'/api/platform/invoices/{i.json()["id"]}/confirm-manual-payment',headers=auth,json={'payment_reference':'VERIFIED-UTR-0001'})
     assert paid.status_code==200 and paid.json()['status']=='paid'
     assert c.get('/api/platform/overview',headers=auth).json()['confirmed_collected']=='29.00'
+    # Newly created temporary credentials must have a future expiry.
+    from v3_api import meta as v3_meta
+    from datetime import datetime, timezone
+    with main.SessionLocal() as s:
+        owner_user = s.query(main.User).filter_by(email='owner@example.test').one()
+        onboarding = v3_meta(s, tid, 'onboarding', owner_user.id)
+        assert onboarding['must_change'] is True
+        assert onboarding['expires'] > datetime.now(timezone.utc).timestamp()
     # Existing PG owner token cannot call platform admin endpoints.
-    ot=c.post('/api/login',json={'email':'owner@example.test','password':'long-temporary-password'}).json()['token']
+    owner_login=c.post('/api/login',json={'email':'owner@example.test','password':'long-temporary-password'})
+    assert owner_login.status_code==200, owner_login.text
+    ot=owner_login.json()['token']
     assert c.get('/api/platform/overview',headers={'Authorization':'Bearer '+ot}).status_code==401
