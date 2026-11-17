@@ -61,6 +61,33 @@ class _DashboardState extends State<Dashboard> {
     children:[
       const OfficialBrand(width:155),
       const SizedBox(height:22),
+      if(app.owner && app.trial != null) Padding(
+        padding: const EdgeInsets.only(bottom:14),
+        child: Material(
+          color: const Color(0xFFF2EAF8),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              const Text('COME.in subscription',style:TextStyle(fontWeight:FontWeight.w800,color:plum)),
+              const SizedBox(height:5),
+              Text(_trialMessage(app.trial!),style:const TextStyle(color:muted,fontSize:12)),
+              if(app.trial!['status']=='trial_active')
+                Text('${app.trial!['days_remaining'] ?? 0} days remaining',style:const TextStyle(fontWeight:FontWeight.w700,color:plum)),
+              const Text('For activation or extension, contact IntProSec platform support.',style:TextStyle(fontSize:11,color:muted)),
+            ]),
+          ),
+        ),
+      ),
+      if(app.profile['role']=='owner') Padding(
+        padding:const EdgeInsets.only(bottom:14),
+        child:FeatureTile(
+          title:'My Subscription',
+          subtitle:'View monthly bill, scan payment QR and submit verification',
+          icon:Icons.qr_code_2,
+          onTap:()=>openPage(context,'ownerSubscription'),
+        ),
+      ),
       Text(app.owner?'${tr(context,'YOUR PORTFOLIO')} · ${app.period}':app.staff?tr(context,'YOUR ASSIGNED WORK'):tr(context,'WELCOME HOME'),
       style:const TextStyle(color:muted,
       fontSize:10,
@@ -338,5 +365,15 @@ class _DashboardState extends State<Dashboard> {
         ])))
       ])
     ]);
+  }
+}
+
+String _trialMessage(Map<String,dynamic> trial) {
+  switch (trial['status']) {
+    case 'trial_active': return 'Your 15-day trial is active.';
+    case 'trial_expired': return 'Your trial has ended. Existing records remain available.';
+    case 'paid': return 'Your organization subscription is active.';
+    case 'suspended': return 'Organization access requires platform administrator review.';
+    default: return 'Trial approval is pending with IntProSec.';
   }
 }

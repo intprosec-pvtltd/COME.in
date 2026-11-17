@@ -2,6 +2,8 @@ import '../core/localization.dart';
 import 'package:flutter/material.dart';
 import 'controller.dart';
 import '../core/design.dart';
+import '../core/api_client.dart';
+import '../features/subscription/owner_subscription_page.dart';
 import '../features/dashboard/dashboard.dart';
 import '../features/management/management.dart';
 import '../features/management/entity_form.dart';
@@ -28,6 +30,7 @@ const ownerRoutes={
   'staffDetail',
   'booking',
   'joiningCode',
+  'ownerSubscription',
   'paymentMethodsEditor'
 };
 Widget pageFor(String route,
@@ -98,6 +101,10 @@ String route,
   }
 }) async {
   final app=AppScope.of(context);
+  if(route=='ownerSubscription' && app.profile['role']!='owner'){
+    feedback(context, 'PG owner access is required.');
+    return;
+  }
   if(ownerRoutes.contains(route)&&!app.owner){
     feedback(context,
     'Your account does not have access to that page.');
@@ -106,10 +113,12 @@ String route,
     feedback(context,
     'Owner access is required.');
     return;
-  } await Navigator.push<void>(context,
-  MaterialPageRoute(builder:(_)=>pageFor(route,
-  id:id,
-  args:args)));
+  }
+  final target = route=='ownerSubscription'
+      ? OwnerSubscriptionPage(apiBase:apiBase, bearerToken:app.api.token??'')
+      : pageFor(route,id:id,args:args);
+  await Navigator.push<void>(context,
+      MaterialPageRoute(builder:(_)=>target));
 } Future<void> editEntity(BuildContext context,
 String kind,
 {

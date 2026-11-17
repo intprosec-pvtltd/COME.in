@@ -11,6 +11,7 @@ class AppController extends ChangeNotifier {
   Map<String,
   dynamic> data = {
   };
+  Map<String,dynamic>? trial;
   String languageCode = 'en';
   /// Persist the chosen language and refresh the entire app.
   Future<void> setLanguage(String code) async {
@@ -115,12 +116,18 @@ class AppController extends ChangeNotifier {
       api.token=null;
       data={
       };
+      trial=null;
       rethrow;
     }
   } Future<void> refresh() async {
     final result=await api.request('/v3/state');
     data=Map<String,
     dynamic>.from(result as Map);
+    try {
+      trial = Map<String,dynamic>.from(await api.request('/trial/me') as Map);
+    } catch (_) {
+      trial = null; // Backward-compatible with older deployed backend.
+    }
     error=null;
     notifyListeners();
   } Future<dynamic> mutate(String path,

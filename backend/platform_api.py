@@ -6,6 +6,7 @@ not gateway transactions. See README_PLATFORM_ADMIN.md before production use.
 """
 import os
 import re
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -492,6 +493,20 @@ def update_subscription(tenant_id:int,data:SubscriptionIn,admin:AdminUser=Depend
 @router.post('/owners/{tenant_id}/invoices', status_code=201)
 def create_invoice(tenant_id:int,data:InvoicePeriodIn,admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
     tenant=_tenant(s,tenant_id)
+    # Phase 3: one invoice per PG and month across the two ledgers.
+    # Do not bypass this guard when the QR billing database is missing/inaccessible.
+    from pathlib import Path as _Path
+    ss_db=_Path(os.getenv('STAYSYNC_SUBSCRIPTION_DB','./staysync_subscriptions.db'))
+    if not ss_db.is_file():
+        raise HTTPException(503,'QR billing ledger unavailable; legacy invoice issuance paused')
+    try:
+        with sqlite3.connect(str(ss_db),timeout=20) as ss_conn:
+            already=ss_conn.execute('SELECT 1 FROM ss_invoices WHERE owner_id=? AND period=?',
+                                    (str(tenant_id),data.period)).fetchone()
+    except sqlite3.Error as exc:
+        raise HTTPException(503,'QR billing ledger unavailable; cannot guarantee unique invoice') from exc
+    if already:
+        raise HTTPException(409,'QR subscription invoice already exists for owner/month')
     if s.scalar(select(SubscriptionInvoice).where(SubscriptionInvoice.tenant_id==tenant_id,SubscriptionInvoice.period==data.period)):
         raise HTTPException(409,'Invoice already exists for this owner and month')
     sub=_subscription(s,tenant_id)

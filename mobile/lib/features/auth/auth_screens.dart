@@ -341,10 +341,7 @@ class SignInScreen extends StatefulWidget {
   @override Widget build(BuildContext context)=>SizedBox(width:145,
   height:150,
   child:Stack(children:[
-    const Positioned(left:13,
-    top:0,
-    child:OfficialBrand(width:120,
-    iconOnly:true)),
+    
     Positioned(left:0,
     bottom:0,
     child:SvgPicture.asset('assets/onboarding/traveler1.svg',
@@ -362,11 +359,9 @@ class SignInScreen extends StatefulWidget {
   });
   @override Widget build(BuildContext context)=>const Scaffold(body:SafeArea(child:Center(child:Column(mainAxisSize:MainAxisSize.min,
   children:[
-    OfficialBrand(width:115,
-    iconOnly:true),
-    SizedBox(height:22),
-    OfficialBrand(width:220),
-    SizedBox(height:30),
+    
+    OfficialBrand(width:190),
+    SizedBox(height:16),
     SizedBox(width:24,
     height:24,
     child:CircularProgressIndicator(strokeWidth:2)),
@@ -481,7 +476,7 @@ class _AuthScaffold extends StatelessWidget {
       return Stack(children: [
         Positioned.fill(
           child: Image.asset(
-            backgroundAsset,
+            'assets/branding/mobile_login_background.png',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
             semanticLabel: 'Co-living PG community artwork',
@@ -517,8 +512,8 @@ class _AuthBrand extends StatelessWidget {
   const _AuthBrand();
   @override
   Widget build(BuildContext context)=>Image.asset(
-    'assets/brand/comein_auth_logo.png',
-    width:235,height:92,fit:BoxFit.contain,
+    'assets/branding/stay_sync_logo_transparent.png',
+    width:190,height:124,fit:BoxFit.contain,
     semanticLabel:'COME.in — Spaces People Belong',
   );
 }
@@ -607,7 +602,7 @@ class _AuthSocialInfo extends StatelessWidget {
   const _AuthSocialInfo();
   @override Widget build(BuildContext context) => const Padding(
     padding:EdgeInsets.symmetric(vertical:5),
-    child:Text('Secure sign-in with your COME.in account',
+    child:Text('Secure sign-in with your Stay Sync account',
       textAlign:TextAlign.center,
       style:TextStyle(fontSize:11,color:Color(0xFF84718B))));
 }

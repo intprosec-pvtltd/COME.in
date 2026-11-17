@@ -47,3 +47,47 @@ docs/backend_test_results.xml
 *.iml
 .flutter-plugins-dependencies
 
+
+# Python environments
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Databases and environment secrets
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.jks
+*.keystore
+key.properties
+*.pem
+*.p12
+*.pfx
+
+# Subscription payment files
+backend/subscription_media/
+backend/v31_test_receipt.png
+
+# Local backups
+*.backup_*
+*.bak
+
+# Flutter
+.dart_tool/
+.flutter-plugins*
+build/
+android/local.properties
+
+# React
+node_modules/
+dist/
+
+# Logs
+*.log

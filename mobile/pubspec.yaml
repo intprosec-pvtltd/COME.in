@@ -27,12 +27,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/
+    - assets/branding/
     - assets/auth/
     - assets/onboarding/
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/brand/icon.png
+  image_path: assets/branding/stay_sync_icon_square.png
   remove_alpha_ios: true
   background_color_ios: "#3B1E3F"

@@ -19,26 +19,21 @@ String indiaTime(dynamic value){
   return d==null?'':DateFormat('h:mm a').format(d.toUtc().add(const Duration(hours:5,
   minutes:30)));
 } class OfficialBrand extends StatelessWidget {
-  const OfficialBrand({
-    super.key,
-    this.width=170,
-    this.iconOnly=false
-  });
+  const OfficialBrand({super.key, this.width = 170, this.iconOnly = false});
   final double width;
   final bool iconOnly;
-  @override Widget build(BuildContext context)=>iconOnly?Image.asset('assets/brand/icon.png',
-  width:width,
-  height:width,
-  semanticLabel:'COME.in'):SizedBox(width:width,
-  height:width*.32,
-  child:ClipRect(child:OverflowBox(maxHeight:width*.75,
-  minHeight:width*.75,
-  child:Image.asset('assets/brand/logo.png',
-  width:width,
-  height:width*.75,
-  fit:BoxFit.contain,
-  semanticLabel:'COME.in — Spaces People Belong'))));
- } class Attribution extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    iconOnly
+      ? 'assets/branding/stay_sync_icon_square.png'
+      : 'assets/branding/stay_sync_logo_transparent.png',
+    width: width,
+    height: iconOnly ? width : width * 0.70,
+    fit: BoxFit.contain,
+    semanticLabel: 'Stay Sync - Spaces People Belong',
+  );
+}
+class Attribution extends StatelessWidget {
   const Attribution({super.key});
   @override Widget build(BuildContext context)=>Padding(
     padding:const EdgeInsets.symmetric(vertical:14),

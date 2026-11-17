@@ -27,7 +27,7 @@ void main(){
   } @override Widget build(BuildContext context)=>AppScope(controller:controller,
   child:AnimatedBuilder(animation:controller,
   builder:(context,
-  _)=>MaterialApp(title:'COME.in',
+  _)=>MaterialApp(title:'Stay Sync Manage',
   debugShowCheckedModeBanner:false,
   theme:buildPgTheme(),
   darkTheme:ThemeData(useMaterial3:true,
