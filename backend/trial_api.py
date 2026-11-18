@@ -61,7 +61,9 @@ def state(session: Session, tenant_id: int):
     qr_expired = bool(entitlement_ends and entitlement_ends < now().date().isoformat())
     # Grandfather pre-existing paid customers, but do not grant a paid status
     # from a trial record alone.
-    if sub and sub.status == 'active' and (not record or record.status != 'suspended') and not qr_expired:
+    if record and record.status == 'suspended':
+        status = 'suspended'
+    elif sub and sub.status == 'active' and not qr_expired:
         status = 'paid'
     elif qr_expired:
         status = 'paid_expired'
@@ -82,6 +84,7 @@ def state(session: Session, tenant_id: int):
             'expires_at':ends.isoformat() if ends else None,
             'days_remaining':remains,'extension_days':record.extension_days if record else 0,
             'paid_until':entitlement_ends,
+            'subscription_suspended':bool(record and record.status == 'suspended' and sub and sub.status == 'paused'),
             'enforcement_enabled':os.getenv('TRIAL_ENFORCEMENT_ENABLED','false').lower() == 'true'}
 
 def record_for(session, tenant_id):
@@ -159,6 +162,43 @@ def convert(tenant_id:int,data:PaidIn,admin:AdminUser=Depends(_requires_admin),s
     sub.status='active';item.status='paid'
     _audit(s,admin,'trial_convert_paid',f'tenant:{tenant_id};reason:{data.reason[:90]}')
     s.commit();return state(s,tenant_id)
+
+
+@router.post('/api/platform/trials/{tenant_id}/end-subscription')
+def end_paid_subscription(tenant_id:int,data:ReasonIn,admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
+    """Admin-only prospective access suspension. Retains payment and billing history."""
+    _tenant(s,tenant_id)
+    sub=s.get(Subscription,tenant_id)
+    if not sub or sub.status!='active':
+        raise HTTPException(409,'Only active paid subscriptions may be ended')
+    item=record_for(s,tenant_id)
+    if item.status=='suspended':
+        raise HTTPException(409,'Already suspended')
+    sub.status='paused'
+    item.status='suspended'
+    _audit(s,admin,'subscription_end_by_admin',f'tenant:{tenant_id};reason:{data.reason[:90]}')
+    s.commit()
+    return state(s,tenant_id)
+
+@router.post('/api/platform/trials/{tenant_id}/resume-subscription')
+def resume_paid_subscription(tenant_id:int,data:ReasonIn,admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
+    """Restore only previously admin-suspended paid entitlements; never create free access."""
+    _tenant(s,tenant_id)
+    sub=s.get(Subscription,tenant_id)
+    item=s.get(OrganizationTrial,tenant_id)
+    if not sub or sub.status!='paused' or not item or item.status!='suspended':
+        raise HTTPException(409,'There is no admin-suspended paid subscription to resume')
+    from subscription_phase3 import active_paid_until
+    until=active_paid_until(s,tenant_id)
+    if not until:
+        raise HTTPException(409,'Paid-through date unavailable; review payment history before resuming')
+    if until < now().date().isoformat():
+        raise HTTPException(409,'Paid subscription has expired; require verified renewal')
+    sub.status='active'
+    item.status='paid'
+    _audit(s,admin,'subscription_resume_by_admin',f'tenant:{tenant_id};reason:{data.reason[:90]}')
+    s.commit()
+    return state(s,tenant_id)
 
 # Restrict only selected new management writes, never resident rent/receipts,
 # essential communication, account deletion, sign-in or history export.

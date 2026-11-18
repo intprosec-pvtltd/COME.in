@@ -408,3 +408,12 @@ body,.app-shell { background:linear-gradient(135deg,#fdf9ff 0%,#fff8fd 60%,#fff5
   filter:none!important;margin:auto!important;border:0!important;border-radius:0!important;
 }
 /* STAYSYNC_MANAGE_PURPLE_SIDEBAR_V1_END */
+
+/* STAYSYNC_ADMIN_CLEANUP_20261118 */
+.login-fields .ss-password-wrap { position: relative; display: flex; align-items:center; width:100%; }
+.login-fields .ss-password-wrap input { width: 100%; padding-right: 84px; }
+.login-fields .ss-password-toggle { position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; padding:8px 10px; color:#602582; cursor:pointer; font-weight:700; font-size:13px; }
+.login-fields .ss-password-toggle:focus-visible { outline:2px solid #7c3aed; border-radius:8px; }
+.sidebar-head { padding-bottom:0 !important; }
+/* END_STAYSYNC_ADMIN_CLEANUP_20261118 */
+

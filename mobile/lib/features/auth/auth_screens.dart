@@ -213,6 +213,8 @@ class SignInScreen extends StatefulWidget {
   final confirmPassword=TextEditingController();
   bool busy=false,
   terms=false;
+  bool showSignupPassword=false;
+  bool showConfirmPassword=false;
   String? error;
   @override void dispose(){
     for(final c in controls.values)c.dispose();
@@ -255,19 +257,26 @@ class SignInScreen extends StatefulWidget {
     const SizedBox(height:12),
     Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
       for(final key in ['name','email','phone','password','property_name']) ...[
-        _AuthField(child:TextFormField(controller:controls[key],obscureText:key=='password',
+        _AuthField(child:TextFormField(controller:controls[key],obscureText:key=='password'&&!showSignupPassword,
           keyboardType:key=='phone'?TextInputType.phone:key=='email'?TextInputType.emailAddress:TextInputType.text,
           textInputAction:TextInputAction.next,
           decoration:InputDecoration(
             prefixIcon:Icon(key=='name'?Icons.person_outline:key=='password'?Icons.lock_outline:key=='phone'?Icons.phone_outlined:key=='property_name'?Icons.home_outlined:Icons.mail_outline),
             hintText:tr(context,{'name':'Full Name','email':'Email','phone':'Phone Number','password':'Password','property_name':'Property Name'}[key]!),
-            suffixIcon:key=='password'?const Icon(Icons.lock_reset_outlined,size:18):null),
+            suffixIcon:key=='password'?IconButton(
+              tooltip:showSignupPassword?'Hide password':'Show password',
+              onPressed:()=>setState(()=>showSignupPassword=!showSignupPassword),
+              icon:Icon(showSignupPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),
+            ):null),
           validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'&&!v.contains('@')?tr(context,'Enter a valid email'):null)),
         const SizedBox(height:10),
       ],
-      _AuthField(child:TextFormField(controller:confirmPassword,obscureText:true,
+      _AuthField(child:TextFormField(controller:confirmPassword,obscureText:!showConfirmPassword,
         textInputAction:TextInputAction.done,
-        decoration:InputDecoration(hintText:tr(context,'Confirm Password'),prefixIcon:const Icon(Icons.lock_outline)),
+        decoration:InputDecoration(hintText:tr(context,'Confirm Password'),prefixIcon:const Icon(Icons.lock_outline),
+          suffixIcon:IconButton(tooltip:showConfirmPassword?'Hide confirmation':'Show confirmation',
+            onPressed:()=>setState(()=>showConfirmPassword=!showConfirmPassword),
+            icon:Icon(showConfirmPassword?Icons.visibility_off_outlined:Icons.visibility_outlined))),
         validator:(v)=>v!=controls['password']!.text?tr(context,'Passwords do not match'):null)),
       const SizedBox(height:10),
       Padding(padding:const EdgeInsets.symmetric(vertical:8),
