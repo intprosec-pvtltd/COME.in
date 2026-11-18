@@ -307,6 +307,7 @@ class _AccommodationInfo extends StatelessWidget {
 } class _JoiningCodePageState extends State<JoiningCodePage>{
   String? code,
   error;
+  int? selectedPropertyId;
   bool loading=false;
   @override void didChangeDependencies(){
     super.didChangeDependencies();
@@ -314,8 +315,10 @@ class _AccommodationInfo extends StatelessWidget {
   }Future<void> load()async{
     loading=true;
     try{
-      final data=await AppScope.of(context).api.request('/v3/joining-code');
-      if(mounted)setState(()=>code='${data['code']}');
+      final app=AppScope.of(context);
+      final pid=selectedPropertyId??app.propertyId??0;
+      final data=await app.api.request('/v3/joining-code?property_id=$pid');
+      if(mounted&&pid==(selectedPropertyId??app.propertyId??0))setState(()=>code='${data['code']}');
     }catch(e){
       if(mounted)setState(()=>error='$e');
     }finally{
@@ -324,12 +327,20 @@ class _AccommodationInfo extends StatelessWidget {
   }@override Widget build(BuildContext context)=>PageBody(title:'Resident joining code',
   subtitle:'Share only with residents approved to join your PG.',
   children:[
+    DropdownButtonFormField<int>(
+      isExpanded:true,
+      initialValue:selectedPropertyId??AppScope.of(context).propertyId??0,
+      decoration:const InputDecoration(labelText:'PG for joining code'),
+      items:AppScope.of(context).rows('properties').where((p)=>p['archived']!=true).map((p)=>DropdownMenuItem<int>(value:(p['id'] as num).toInt(),child:Text('${p['name']}'))).toList(),
+      onChanged:(pid){if(pid==null)return;setState((){selectedPropertyId=pid;code=null;error=null;});load();}),
+    const SizedBox(height:12),
+    const Text('This code identifies the selected PG. Residents must still be invited and approved by the owner.'),
     if(error!=null)...[
       Text(error!),
       TextButton(onPressed:load,
       child:const Text('Retry'))
     ]else if(code==null)const Center(child:CircularProgressIndicator())else ...[
-      HeroCard(label:'Your PG joining code',
+      HeroCard(label:'Selected PG joining code',
       value:code!),
       FilledButton.icon(onPressed:()=>copyValue(context,
       code!),

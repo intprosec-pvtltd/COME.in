@@ -53,6 +53,8 @@ class ComplaintsPage extends StatefulWidget {
         overflow:TextOverflow.ellipsis,
         style:const TextStyle(color:muted,
         fontSize:12)),
+        const SizedBox(height:8),
+        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(r['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']} · Complaint #${r['id']}',style:const TextStyle(color:muted,fontSize:11)),
         const SizedBox(height:10),
         Text('${r['priority']??'Medium'} priority',
         style:const TextStyle(fontSize:10,
@@ -192,7 +194,7 @@ class ComplaintsPage extends StatefulWidget {
       ]as int?;
       initialized=true;
     }return PageBody(title:'${t['category']}',
-    subtitle:'Maintenance request',
+    subtitle:'Complaint #${widget.id} · ${app.rows('properties').firstWhere((p)=>p['id']==(t['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',
     refresh:app.refresh,
     children:[
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
@@ -294,13 +296,14 @@ class ComplaintsPage extends StatefulWidget {
   String filter='All';
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
-    final rows=app.rows('facilities').where((r)=>filter=='All'||r[
+    final rows=app.scoped('facilities').where((r)=>filter=='All'||r[
       'status'
     ]==filter).toList();
     return PageBody(title:'Facility updates',
     subtitle:'Power, water, Wi-Fi and maintenance.',
     refresh:app.refresh,
     children:[
+      if(app.owner)propertySelector(context),
       Wrap(spacing:7,
       children:[
         for(final s in [
@@ -321,6 +324,8 @@ class ComplaintsPage extends StatefulWidget {
           StatusPill('${f['status']}')
         ]),
         const SizedBox(height:12),
+        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(f['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:muted,fontSize:11)),
+        const SizedBox(height:8),
         Text('${f['details']}',
         style:const TextStyle(fontSize:12)),
         Text('${f['category']}',
@@ -359,22 +364,13 @@ class ComplaintsPage extends StatefulWidget {
   });
   @override State<AnnouncementsPage> createState()=>_AnnouncementsPageState();
 } class _AnnouncementsPageState extends State<AnnouncementsPage>{
-  bool archived=false;
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
-    final notices=app.rows('notices').where((n)=>archived?n[
-      'status'
-    ]=='archived':n[
-      'status'
-    ]!='archived').toList();
+    final notices=app.scoped('notices').where((n)=>n['status']!='archived').toList();
     return PageBody(title:'Announcements',
     refresh:app.refresh,
     children:[
-      if(app.owner)SwitchListTile(contentPadding:EdgeInsets.zero,
-      title:const Text('Show archive',
-      style:TextStyle(fontSize:12)),
-      value:archived,
-      onChanged:(v)=>setState(()=>archived=v)),
+      if(app.owner)propertySelector(context),
       for(final n in notices)Surface(onTap:()=>openPage(context,
       'postDetail',
       id:n[
@@ -390,6 +386,8 @@ class ComplaintsPage extends StatefulWidget {
           ]==true)const StatusPill('Important')
         ]),
         const SizedBox(height:12),
+        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:muted,fontSize:11)),
+        const SizedBox(height:8),
         Text('${n['body']}',
         maxLines:3,
         overflow:TextOverflow.ellipsis,
@@ -438,7 +436,7 @@ class ComplaintsPage extends StatefulWidget {
       EmptyState('Notice unavailable.')
     ]);
     return PageBody(title:'${n['title']}',
-    subtitle:'Posted by your PG owner',
+    subtitle:'${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.profile['tenant']?['name']??app.data['accommodation']?['property']??'Primary PG'})['name']} · Posted by your PG owner',
     children:[
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
@@ -485,12 +483,13 @@ class ComplaintsPage extends StatefulWidget {
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
     return PageBody(title:'Food menu',
-    subtitle:'Your PG’s weekly meals.',
+    subtitle:'Weekly meals for the selected PG.',
     refresh:app.refresh,
     children:[
-      for(final m in app.rows('meals'))Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+      if(app.owner)propertySelector(context),
+      for(final m in app.scoped('meals'))Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
-        Text('${m['day']}',
+        Text('🏢 ${app.rows('properties').firstWhere((p)=>p['id']==(m['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']} · ${m['day']}',
         style:const TextStyle(fontSize:17,
         fontWeight:FontWeight.w800)),
         const SizedBox(height:12),
@@ -517,7 +516,7 @@ class ComplaintsPage extends StatefulWidget {
         initial:m),
         child:const Text('Edit menu'))
       ])),
-      if(app.rows('meals').isEmpty)const EmptyState('No meal menu published.'),
+      if(app.scoped('meals').isEmpty)const EmptyState('No meal menu published for this PG.'),
       if(app.owner)addButton(context,
       'Set daily menu',
       'meal')
@@ -569,8 +568,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
       for(final n in rows)Surface(onTap:()async{
         final ok=await perform(context,
         ()=>app.mutate('/v3/read/alert/${n['id']}'));
-        if(ok&&context.mounted)await openPage(context,
-        '${n['destination']}');
+        if(ok&&context.mounted){
+          final entityId=n['entity_id'];
+          if(n['destination']=='complaints'&&entityId is int){
+            await openPage(context,'complaintDetail',id:entityId);
+          }else{
+            await openPage(context,'${n['destination']}');
+          }
+        }
       },
       child:Row(children:[
         const Icon(Icons.notifications_outlined,
@@ -582,6 +587,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           style:TextStyle(fontWeight:n[
             'read'
           ]==true?FontWeight.w500:FontWeight.w800)),
+          if(n['property_id']!=null)Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(fontSize:10,color:muted)),
           Text('${n['body']}',
           style:const TextStyle(color:muted,
           fontSize:11)),

@@ -150,17 +150,13 @@ class SignInScreen extends StatefulWidget {
           softWrap:true,
           style:const TextStyle(fontSize:29,fontWeight:FontWeight.w900,height:1.12,color:plum)),
         const SizedBox(height:4),
-        // Readable contrast on both bright and dark areas of the login illustration.
-        Container(
-          padding:const EdgeInsets.symmetric(horizontal:14,vertical:6),
-          decoration:BoxDecoration(
-            color:const Color(0xEEFFFFFF),
-            borderRadius:BorderRadius.circular(18),
-            boxShadow:const [BoxShadow(color:Color(0x24000000),blurRadius:8,offset:Offset(0,2))],
-          ),
-          child:Text(tr(context,'Same spaces. Brighter days.'),textAlign:TextAlign.center,
-            style:const TextStyle(fontSize:14,fontWeight:FontWeight.w700,color:Color(0xFF351339))),
-        ),
+        // Readable copy directly on the illustration, without a white background.
+        Text('Same spaces. Brighter days.',
+          textAlign:TextAlign.center,
+          softWrap:true,
+          style:const TextStyle(fontSize:14,fontWeight:FontWeight.w800,
+            color:Color(0xFF351339),height:1.3,
+            shadows:[Shadow(color:Color(0x66FFFFFF),blurRadius:5)])),
         const SizedBox(height:12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
           _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
@@ -532,7 +528,7 @@ class _AuthBrand extends StatelessWidget {
   Widget build(BuildContext context)=>Image.asset(
     'assets/branding/stay_sync_logo_transparent.png',
     width:190,height:124,fit:BoxFit.contain,
-    semanticLabel:'COME.in â€” Spaces People Belong',
+    semanticLabel:'COME.in Ã¢â‚¬â€ Spaces People Belong',
   );
 }
 class _AuthField extends StatelessWidget {
@@ -622,5 +618,7 @@ class _AuthSocialInfo extends StatelessWidget {
     padding:EdgeInsets.symmetric(vertical:5),
     child:Text('Secure sign-in with your Stay Sync account',
       textAlign:TextAlign.center,
-      style:TextStyle(fontSize:11,color:Color(0xFF84718B))));
+      style:TextStyle(fontSize:12,fontWeight:FontWeight.w800,
+        color:Color(0xFF351339),
+        shadows:[Shadow(color:Color(0x66FFFFFF),blurRadius:4)])));
 }

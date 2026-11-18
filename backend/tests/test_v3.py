@@ -175,3 +175,70 @@ def test_email_reset_code_delivery_and_validation(monkeypatch):
  assert client.post('/api/v3/reset-password',json={'email':email,'code':sent['code'],'new_password':'After123!'}).status_code==200
  assert req('GET','/v3/state',login(email,'After123!'))['profile']['email']==email
  assert client.post('/api/v3/reset-password',json={'email':email,'code':sent['code'],'new_password':'Again123!'}).status_code==400
+
+
+def test_multi_pg_content_isolation_and_complaint_alerts():
+    """Different PGs in the same owner account must not leak scoped content."""
+    email='multi-owner-'+uuid.uuid4().hex+'@test.pg'
+    created=client.post('/api/v3/register',json={'name':'Multi PG Owner','email':email,
+        'phone':'9876543210','password':'MultiOwner123!','role':'owner','property_name':'Primary PG'})
+    assert created.status_code==201, created.text
+    h=login(email,'MultiOwner123!')
+    p1=create('property',{'name':'North House'},h)
+    p2=create('property',{'name':'South House'},h)
+    def invite(name,pid):
+        mail=f'{name.lower()}-{uuid.uuid4().hex}@test.pg'
+        r=req('POST','/v3/residents/invite',h,{'name':name,'email':mail,'phone':'9876543210','property_id':pid},201)
+        temp = r['temporary_password']
+        first_session = login(mail, temp)
+        req('POST', '/v3/password', first_session, {
+            'current_password': temp,
+            'new_password': 'ResidentVerified123!'
+        })
+        return login(mail, 'ResidentVerified123!')
+    north=invite('North Resident',p1)
+    south=invite('South Resident',p2)
+    notice=create('notice',{'title':'North bulletin','body':'North only','property_id':p1},h)
+    facility=create('facility',{'title':'Water outage','details':'Today 2 PM','category':'water','status':'outage','property_id':p2},h)
+    nstate=req('GET','/v3/state',north)
+    sstate=req('GET','/v3/state',south)
+    assert any(n['id']==notice and n['property_id']==p1 for n in nstate['notices'])
+    assert not any(n['id']==notice for n in sstate['notices'])
+    assert not any(f['id']==facility for f in nstate['facilities'])
+    assert any(f['id']==facility and f['property_id']==p2 for f in sstate['facilities'])
+    assert not any(n['id']==notice for n in client.get('/api/notices',headers=south).json())
+    assert not any(f['id']==facility for f in client.get('/api/facilities',headers=north).json())
+    assert req('GET',f'/v3/messages?property_id={p1}',south,expected=403)['detail']
+    message=req('POST','/v3/messages',north,{'body':'Hello North','property_id':p1},201)['id']
+    assert any(m['id']==message for m in req('GET',f'/v3/messages?property_id={p1}',h))
+    assert not any(m['id']==message for m in req('GET',f'/v3/messages?property_id={p2}',h))
+    assert not any(m['id']==message for m in req('GET','/v3/state',south)['messages'])
+    assert not any(m['id']==message for m in client.get('/api/community/messages',headers=south,params={'property_id':p2}).json())
+    attachment=client.post('/api/community/attachments',headers=north,params={'property_id':p1},
+        files={'file':('north.txt',b'Only North','text/plain')})
+    assert attachment.status_code==201,attachment.text
+    aid=attachment.json()['id']
+    assert client.get(f'/api/community/attachments/{aid}',headers=north).status_code==200
+    assert client.get(f'/api/community/attachments/{aid}',headers=south).status_code==403
+    complaint=create('complaint',{'category':'Leak','description':'Tap dripping constantly'},north)
+    alerts=req('GET','/v3/state',h)['notifications']
+    alert=next(a for a in alerts if a['destination']=='complaints' and a.get('entity_id')==complaint)
+    assert alert['property_id']==p1 and 'North House' in alert['body']
+    assert f'#{complaint}' in alert['body']
+    assert all(not (a.get('destination')=='complaints' and a.get('entity_id')==complaint) for a in req('GET','/v3/state',south)['notifications'])
+
+
+def test_single_plan_rate_and_preserved_historical_invoice(tmp_path):
+    from staysync_subscriptions import BillingStore
+    store=BillingStore(str(tmp_path/'subscriptions.db'),str(tmp_path/'payment_files'))
+    invoice=store.issue_invoice('owner-1','2026-11',beds=100,residents=2)
+    assert invoice['amount_cents']==7800
+    assert invoice['bed_rate_cents']==0
+    with pytest.raises(ValueError):
+        store.set_pricing('admin',0,29)
+    assert store.set_pricing('admin',0,39)['resident_rate']=='39.00'
+    # A snapshot of a previously issued bill cannot change when pricing changes.
+    with store.connect() as db:
+        db.execute('UPDATE ss_invoices SET amount_cents=5800 WHERE id=?',(invoice['id'],))
+    assert store.issue_invoice('owner-1','2026-11',beds=100,residents=2)['amount_cents']==5800
+    assert store.issue_invoice('owner-1','2026-12',beds=100,residents=3)['amount_cents']==11700

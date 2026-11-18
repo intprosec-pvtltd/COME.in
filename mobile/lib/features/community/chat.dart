@@ -28,6 +28,11 @@ class ChatPage extends StatefulWidget {
   String? error,
   reply;
   int? editing;
+  int? selectedPropertyId;
+  int get communityPropertyId => selectedPropertyId ?? (app?.owner==true
+      ? (app?.propertyId ?? ((app?.rows('properties')??const <Map<String,dynamic>>[]).where((p)=>p['archived']!=true).isNotEmpty
+          ? (app!.rows('properties').firstWhere((p)=>p['archived']!=true)['id'] as num).toInt() : 0))
+      : ((app?.data['accommodation'] as Map?)?['property_id'] as num?)?.toInt()??0);
   @override void initState(){
     super.initState();
     WidgetsBinding.instance.addObserver(this);
@@ -35,7 +40,7 @@ class ChatPage extends StatefulWidget {
     super.didChangeDependencies();
     if(app==null){
       app=AppScope.of(context);
-      messages=app!.rows('messages');
+      messages=app!.rows('messages').where((m)=>(m['property_id']??0)==communityPropertyId).toList();
       Future.microtask(()=>load(forceScroll:true));
       startTimer();
     }
@@ -61,12 +66,17 @@ class ChatPage extends StatefulWidget {
   })async{
     if(polling)return;
     polling=true;
+    final requestedProperty=communityPropertyId;
     final nearEnd=!scroll.hasClients||scroll.position.maxScrollExtent-scroll.offset<100;
     try{
-      final rows=await app!.api.request('/v3/messages')as List;
+      final rows=await app!.api.request('/v3/messages?property_id=$requestedProperty')as List;
+      // Fail closed: do not display legacy/unscoped messages or messages from another PG.
+      // The server also MUST enforce property-scoped authorization; this check
+      // prevents stale/incorrect response data from appearing under another PG.
       final next=rows.map((m)=>Map<String,
-      dynamic>.from(m as Map)).toList();
-      if(!mounted)return;
+      dynamic>.from(m as Map)).where((m) =>
+          int.tryParse('${m['property_id'] ?? ''}') == requestedProperty).toList();
+      if(!mounted||requestedProperty!=communityPropertyId)return;
       if(jsonEncode(next)!=jsonEncode(messages)||loading||error!=null){
         setState((){
           messages=next;
@@ -76,12 +86,16 @@ class ChatPage extends StatefulWidget {
         if(forceScroll||nearEnd)scrollEnd();
       }
     }catch(e){
-      if(mounted)setState((){
+      if(mounted&&requestedProperty==communityPropertyId)setState((){
         error='$e';
         loading=false;
       });
     }finally{
       polling=false;
+      // An older PG response must never replace the newly selected PG feed.
+      if(mounted&&requestedProperty!=communityPropertyId){
+        Future.microtask(()=>load(forceScroll:true));
+      }
     }
   } void scrollEnd(){
     WidgetsBinding.instance.addPostFrameCallback((_){
@@ -92,21 +106,31 @@ class ChatPage extends StatefulWidget {
   } Future<void> send()async{
     final text=input.text.trim();
     if(text.isEmpty||sending)return;
+    final targetProperty = communityPropertyId;
     setState(()=>sending=true);
     try{
+      // Never post into an older owner-wide community endpoint.
+      final capability=await app!.api.request('/v3/community-capabilities');
+      if(capability is! Map || capability['property_scoped']!=true){
+        throw Exception('Server does not support PG-private messaging. Update backend first.');
+      }
       await app!.api.request('/v3/messages${editing==null?'':'/$editing'}',
       method:editing==null?'POST':'PATCH',
       body:{
         'body':text,
-        'reply':reply??''
+        'reply':reply??'',
+        'property_id':targetProperty
       });
       if(!mounted)return;
-      input.clear();
-      setState((){
-        editing=null;
-        reply=null;
-      });
-      await load(forceScroll:true);
+      // Don't clear a draft entered for another PG while this request was pending.
+      if(targetProperty == communityPropertyId){
+        input.clear();
+        setState((){
+          editing=null;
+          reply=null;
+        });
+        await load(forceScroll:true);
+      }
     }catch(e){
       if(mounted)feedback(context,
       'Message not sent: $e');
@@ -120,9 +144,15 @@ class ChatPage extends StatefulWidget {
       feedback(context,
       'Use a file up to 10 MB.');
       return;
-    }setState(()=>sending=true);
+    }
+    final targetProperty = communityPropertyId;
+    setState(()=>sending=true);
     try{
-      await app!.api.upload('/community/attachments',
+      final capability=await app!.api.request('/v3/community-capabilities');
+      if(capability is! Map || capability['property_scoped']!=true){
+        throw Exception('Server does not support private PG attachments. Update backend first.');
+      }
+      await app!.api.upload('/community/attachments?property_id=$targetProperty',
       name,
       bytes,
       mimeType(name));
@@ -282,7 +312,13 @@ class ChatPage extends StatefulWidget {
       const SizedBox(width:10),
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
-        Text('${a.profile['tenant']?['name']??'PG community'}',
+        if(a.owner)DropdownButton<int>(
+          isDense:true,
+          value:a.rows('properties').any((p)=>p['id']==communityPropertyId)?communityPropertyId:0,
+          underline:const SizedBox.shrink(),
+          items:a.rows('properties').where((p)=>p['archived']!=true).map((p)=>DropdownMenuItem<int>(value:p['id'] as int,child:Text('${p['name']}',overflow:TextOverflow.ellipsis))).toList(),
+          onChanged:(pid){if(pid==null)return;setState((){selectedPropertyId=pid;messages=[];loading=true;reply=null;editing=null;});load(forceScroll:true);},
+        )else Text('${a.data['accommodation']?['property']??a.profile['tenant']?['name']??'PG community'}',
         style:const TextStyle(fontSize:15,
         fontWeight:FontWeight.w800)),
         const Text('Private community',

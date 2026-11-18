@@ -56,14 +56,33 @@ def put(s,tenant,kind,key,data):
  else:s.add(Document(tenant_id=tenant,kind=kind,key=str(key),payload=dict(data)))
  return data
 def owner(u):role(u,'owner','manager')
-def alert(s,u,title,body,destination,user_id=None,audience='all'):
- s.add(Alert(tenant_id=u.tenant_id,user_id=user_id,audience=audience,title=title,body=body[:1000],destination=destination))
+def alert(s,u,title,body,destination,user_id=None,audience='all',property_id=None,entity_id=None):
+ a=Alert(tenant_id=u.tenant_id,user_id=user_id,audience=audience,title=title,body=body[:1000],destination=destination)
+ s.add(a)
+ if property_id is not None or entity_id is not None:
+  s.flush()
+  put(s,u.tenant_id,'alert_meta',a.id,{'property_id':property_id,'entity_id':entity_id})
 def audit(s,u,action,details):put(s,u.tenant_id,'audit',uuid.uuid4().hex,{'actor':u.id,'action':action,'details':details,'at':iso(now())})
 def commit(s):
  try:s.commit()
  except IntegrityError:s.rollback();raise HTTPException(409,'This record conflicts with an existing record. Refresh and try again.')
 def property_exists(s,u,pid):
- if pid and not doc(s,u.tenant_id,'property',pid):raise HTTPException(404,'Property not found')
+ if pid and (not doc(s,u.tenant_id,'property',pid) or doc(s,u.tenant_id,'property',pid).payload.get('archived')):
+  raise HTTPException(404,'Active property not found')
+def property_name(s,u,pid):
+ property_exists(s,u,pid)
+ return next((p['name'] for p in property_rows(s,u) if p['id']==pid), 'Unknown PG')
+def message_property(s,u,message):
+ return int(meta(s,u.tenant_id,'message_meta',message.id).get('property_id',0))
+def chat_access(s,u,pid):
+ property_exists(s,u,pid)
+ if u.role=='resident' and int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))!=pid:
+  raise HTTPException(403,'This community belongs to another PG')
+def visible_property(s,u,pid):
+ return u.role!='resident' or int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))==int(pid)
+def visible_alert(s,u,a):
+ md=meta(s,u.tenant_id,'alert_meta',a.id)
+ return 'property_id' not in md or visible_property(s,u,md['property_id'])
 def safe_file(s,u,fid,purpose):
  if not fid:return
  f=tenant_get(s,PrivateFile,fid,u.tenant_id)
@@ -265,11 +284,23 @@ def reset_password(data:ResetRequest,s:Session=Depends(db)):
  return {'ok':True}
 
 @router.get('/joining-code')
-def joining_code(u:User=Depends(current),s:Session=Depends(db)):
- owner(u);d=s.scalar(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='joining_code'))
- if not d:
-  key=secrets.token_hex(5).upper();put(s,u.tenant_id,'joining_code',key,{});commit(s);return {'code':key}
- return {'code':d.key}
+def joining_code(property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
+ owner(u);property_exists(s,u,property_id)
+ # Preserve previously issued primary-PG codes so existing invitations do not silently change.
+ if property_id==0:
+  legacy=s.scalar(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='joining_code'))
+  if legacy:return {'code':legacy.key,'property_id':0,'property_name':property_name(s,u,0),
+                    'message':'Owner approval and invitation are still required.'}
+ # Per-property codes identify a PG, but remain owner-controlled invitation references.
+ # Never authenticate or admit an account based solely on this code.
+ key=f'property:{property_id}'
+ item=meta(s,u.tenant_id,'property_joining_code',key)
+ if not item:
+  item={'code':secrets.token_hex(6).upper(),'property_id':property_id}
+  put(s,u.tenant_id,'property_joining_code',key,item);commit(s)
+ return {'code':item['code'],'property_id':property_id,'property_name':property_name(s,u,property_id),
+         'message':'Share only with approved residents. A joining code does not replace an owner invitation.'}
+
 
 def property_rows(s,u):
  t=s.get(Tenant,u.tenant_id)
@@ -278,13 +309,15 @@ def property_rows(s,u):
 def user_rows(s,u,role_name):
  rows=s.scalars(select(User).where(User.tenant_id==u.tenant_id,User.role==role_name)).all()
  return [dict(id=r.id,name=r.name,email=r.email,room=r.room,**meta(s,u.tenant_id,'profile',r.id),**meta(s,u.tenant_id,'resident_meta' if role_name=='resident' else 'staff_meta',r.id)) for r in rows]
-def chat_rows(s,u):
- messages=s.scalars(select(ChatMessage).where(ChatMessage.tenant_id==u.tenant_id).order_by(ChatMessage.id.desc()).limit(200)).all();members={r.id:r for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))};names={i:r.name for i,r in members.items()};out=[]
+def chat_rows(s,u,property_id=None):
+ messages=s.scalars(select(ChatMessage).where(ChatMessage.tenant_id==u.tenant_id).order_by(ChatMessage.id.desc())).all();members={r.id:r for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))};names={i:r.name for i,r in members.items()};out=[]
  for m in reversed(messages):
   md=meta(s,u.tenant_id,'message_meta',m.id)
   if u.id in md.get('hidden_by',[]):continue
-  out.append({'id':m.id,'author_id':m.author_id,'author':names.get(m.author_id,'Former member'),'author_phone':meta(s,u.tenant_id,'profile',m.author_id).get('phone','') if m.author_id in members else '', 'author_room':members[m.author_id].room if m.author_id in members and members[m.author_id].role=='resident' else '', 'body':'' if m.deleted else m.body,'deleted':bool(m.deleted),'created_at':iso(m.created_at),'edited':md.get('edited',False),'reply':md.get('reply',''),'attachments':[] if m.deleted else [{'id':a.id,'filename':a.filename,'content_type':a.content_type,'url':f'/api/community/attachments/{a.id}'} for a in s.scalars(select(ChatAttachment).where(ChatAttachment.message_id==m.id,ChatAttachment.tenant_id==u.tenant_id))]})
- return out
+  pid=int(md.get('property_id',0))
+  if not visible_property(s,u,pid) or (property_id is not None and pid!=property_id):continue
+  out.append({'property_id':pid,'id':m.id,'author_id':m.author_id,'author':names.get(m.author_id,'Former member'),'author_phone':meta(s,u.tenant_id,'profile',m.author_id).get('phone','') if m.author_id in members else '', 'author_room':members[m.author_id].room if m.author_id in members and members[m.author_id].role=='resident' else '', 'body':'' if m.deleted else m.body,'deleted':bool(m.deleted),'created_at':iso(m.created_at),'edited':md.get('edited',False),'reply':md.get('reply',''),'attachments':[] if m.deleted else [{'id':a.id,'filename':a.filename,'content_type':a.content_type,'url':f'/api/community/attachments/{a.id}'} for a in s.scalars(select(ChatAttachment).where(ChatAttachment.message_id==m.id,ChatAttachment.tenant_id==u.tenant_id))]})
+ return out[-200:]
 
 class RoomTransferInput(BaseModel):
  room_id:int
@@ -324,6 +357,73 @@ def payment_risk_out(s:Session, tenant_id:int, payment:Payment)->dict:
  return {'risk_acknowledged':False,'risk_level':'unverified','analysis_status':'not_requested','risk_flags':[],
          'review_notes':[], 'authenticity_verified':False, **md}
 
+def meal_rows(s,u):
+ pid=int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0)) if u.role=='resident' else None
+ records=[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='property_meal')).all()]
+ if pid is None or pid==0:
+  override_days={x.get('day') for x in records if x.get('property_id')==0}
+  records.extend(dict(id=m.id,day=m.day,breakfast=m.breakfast,lunch=m.lunch,dinner=m.dinner,property_id=0)
+      for m in s.scalars(select(Meal).where(Meal.tenant_id==u.tenant_id)).all() if m.day not in override_days)
+ return [m for m in records if pid is None or int(m.get('property_id',0))==pid]
+
+def payment_destination(s,u,pid):
+ property_exists(s,u,pid)
+ if pid==0:
+  t=s.get(Tenant,u.tenant_id)
+  legacy={'upi_id':t.upi_id,'bank_holder':t.bank_holder,'bank_name':t.bank_name,
+          'bank_account_masked':'****'+t.bank_account[-4:] if t.bank_account else '',
+          'bank_account':t.bank_account,
+          'ifsc':t.ifsc,'qr_file_id':meta(s,u.tenant_id,'owner_payment_qr','current').get('file_id')}
+ else:
+  legacy={}
+ settings=meta(s,u.tenant_id,'property_payment',pid)
+ merged={**legacy,**settings}
+ if merged.get('bank_account'):
+  merged['bank_account_masked']='****'+merged['bank_account'][-4:]
+ merged['property_id']=pid
+ merged['property_name']=property_name(s,u,pid)
+ merged['configured']=bool(merged.get('upi_id') or merged.get('qr_file_id') or merged.get('bank_account_masked'))
+ return merged
+
+class PropertyPaymentInput(BaseModel):
+ property_id:int=Field(ge=0)
+ upi_id:str=Field(default='',max_length=100)
+ bank_holder:str=Field(default='',max_length=120)
+ bank_name:str=Field(default='',max_length=120)
+ bank_account:str=Field(default='',max_length=40)
+ ifsc:str=Field(default='',max_length=20)
+
+@router.get('/property-payment')
+def get_property_payment(property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
+ pid=property_id if u.role in ('owner','manager') else int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))
+ if u.role not in ('owner','manager','resident'):raise HTTPException(403,'Not permitted')
+ if u.role=='resident' and property_id!=pid:raise HTTPException(403,'Not your PG payment account')
+ return payment_destination(s,u,pid)
+
+@router.put('/property-payment')
+def update_property_payment(data:PropertyPaymentInput,u:User=Depends(current),s:Session=Depends(db)):
+ owner(u);property_exists(s,u,data.property_id)
+ existing=payment_destination(s,u,data.property_id)
+ changed={k:getattr(data,k).strip() for k in ('upi_id','bank_holder','bank_name','ifsc')}
+ # A blank account number means retain the existing one; never return full account digits.
+ account=data.bank_account.strip()
+ if account:
+  if not account.isdigit() or len(account)>40:raise HTTPException(422,'Invalid bank account number')
+  changed['bank_account_masked']='****'+account[-4:]
+  # Existing application persists sensitive bank data on the primary Tenant;
+  # retain that established storage model for primary, but never expose full digits in JSON.
+  if data.property_id==0:s.get(Tenant,u.tenant_id).bank_account=account
+  else:changed['bank_account']=account
+ changed['qr_file_id']=existing.get('qr_file_id')
+ if data.property_id==0:
+  legacy_tenant=s.get(Tenant,u.tenant_id)
+  for field in ('upi_id','bank_holder','bank_name','ifsc'):
+   setattr(legacy_tenant,field,changed[field])
+ put(s,u.tenant_id,'property_payment',data.property_id,changed)
+ audit(s,u,'property_payment_updated',{'property_id':data.property_id})
+ commit(s)
+ return payment_destination(s,u,data.property_id)
+
 @router.get('/state')
 def state(u:User=Depends(current),s:Session=Depends(db)):
  role(u,'owner','manager','resident','staff');is_owner=u.role in ('owner','manager')
@@ -337,7 +437,7 @@ def state(u:User=Depends(current),s:Session=Depends(db)):
  t=s.get(Tenant,u.tenant_id)
  resident_property=meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0)
  accommodation_property=next((p['name'] for p in property_rows(s,u) if p['id']==resident_property),t.name)
- return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':[dict(id=m.id,day=m.day,breakfast=m.breakfast,lunch=m.lunch,dinner=m.dinner) for m in s.scalars(select(Meal).where(Meal.tenant_id==u.tenant_id))],'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[{'id':r.id,'name':r.name,'role':r.role} for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))],'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner)],'payment_methods':{'upi_id':t.upi_id,'bank_holder':t.bank_holder,'bank_name':t.bank_name,'bank_account_masked':'****'+t.bank_account[-4:] if t.bank_account else '', 'ifsc':t.ifsc,'qr_image_url':t.qr_image_url,'qr_file_id':meta(s,u.tenant_id,'owner_payment_qr','current').get('file_id')},'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
+ return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices if visible_property(s,u,meta(s,u.tenant_id,'notice_meta',n.id).get('property_id',0))],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',f.id).get('property_id',0))],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':meal_rows(s,u),'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[{'id':r.id,'name':r.name,'role':r.role} for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id)) if u.role in ('owner','manager') or r.id==u.id or (r.role=='resident' and visible_property(s,u,meta(s,u.tenant_id,'resident_meta',r.id).get('property_id',0)))],'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,entity_id=meta(s,u.tenant_id,'alert_meta',a.id).get('entity_id'),property_id=meta(s,u.tenant_id,'alert_meta',a.id).get('property_id'),created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner) and visible_alert(s,u,a)],'payment_methods':payment_destination(s,u,resident_property if u.role=='resident' else 0),'property_payment_methods':[payment_destination(s,u,int(p['id'])) for p in property_rows(s,u) if p.get('archived')!=True] if is_owner else [],'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
 
 class PropertyInput(BaseModel):
  name:str=Field(min_length=2,max_length=120)
@@ -372,11 +472,13 @@ class BookingInput(BaseModel):
  status:str=Field(default='Enquiry',pattern='^(Enquiry|Contacted|Closed|Cancelled)$')
  property_id:int=0
 class FacilityInput(BaseModel):
+ property_id:int=Field(default=0,ge=0)
  title:str=Field(min_length=3,max_length=160)
  details:str=Field(min_length=3,max_length=2500)
  category:str=Field(pattern='^(water|power|wifi|maintenance|other)$')
  status:str=Field(pattern='^(scheduled|outage|maintenance|restored|normal)$')
 class NoticeInput(BaseModel):
+ property_id:int=Field(default=0,ge=0)
  title:str=Field(min_length=3,max_length=160)
  body:str=Field(min_length=3,max_length=4000)
  category:str='general'
@@ -387,6 +489,7 @@ class MealInput(BaseModel):
  breakfast:str=Field(min_length=1,max_length=250)
  lunch:str=Field(min_length=1,max_length=250)
  dinner:str=Field(min_length=1,max_length=250)
+ property_id:int=Field(default=0,ge=0)
 class ComplaintInput(BaseModel):
  category:str=Field(min_length=2,max_length=50)
  description:str=Field(min_length=5,max_length=2000)
@@ -461,20 +564,44 @@ def save_entity(kind,identifier,data,u,s,creating):
   for k,v in vals.items():setattr(r,k,v)
   s.add(r);s.flush();identifier=r.id;put(s,u.tenant_id,'expense_meta',identifier,{'property_id':d['property_id']})
  elif kind=='facility':
+  pid=d.pop('property_id')
   r=Facility(tenant_id=u.tenant_id,**d) if creating else tenant_get(s,Facility,identifier,u.tenant_id)
   for k,v in d.items():setattr(r,k,v)
-  s.add(r);s.flush();identifier=r.id;md=meta(s,u.tenant_id,'facility_meta',identifier);md['history']=[*md.get('history',[]),{'status':d['status'],'at':iso(now())}];put(s,u.tenant_id,'facility_meta',identifier,md);alert(s,u,'Facility update',d['title'],'facilities')
+  s.add(r);s.flush();identifier=r.id;md=meta(s,u.tenant_id,'facility_meta',identifier)
+  if not creating and int(md.get('property_id',0))!=pid:raise HTTPException(409,'Facility cannot be moved between PGs')
+  md['property_id']=pid
+  md['history']=[*md.get('history',[]),{'status':d['status'],'at':iso(now())}]
+  put(s,u.tenant_id,'facility_meta',identifier,md)
+  alert(s,u,'Facility update',f'{property_name(s,u,pid)}: {d["title"]}','facilities',property_id=pid,entity_id=identifier)
  elif kind=='notice':
-  important=d.pop('important');r=Notice(tenant_id=u.tenant_id,**d) if creating else tenant_get(s,Notice,identifier,u.tenant_id)
-  for k,v in d.items():setattr(r,k,v)
-  s.add(r);s.flush();identifier=r.id;put(s,u.tenant_id,'notice_meta',identifier,{'important':important});alert(s,u,'Announcement',d['title'],'announcements')
- elif kind=='meal':
-  r=s.scalar(select(Meal).where(Meal.tenant_id==u.tenant_id,Meal.day==d['day'])) if creating else tenant_get(s,Meal,identifier,u.tenant_id)
-  if not r:r=Meal(tenant_id=u.tenant_id,**d)
+  important=d.pop('important');pid=d.pop('property_id')
+  r=Notice(tenant_id=u.tenant_id,**d) if creating else tenant_get(s,Notice,identifier,u.tenant_id)
   for k,v in d.items():setattr(r,k,v)
   s.add(r);s.flush();identifier=r.id
+  old=meta(s,u.tenant_id,'notice_meta',identifier)
+  if not creating and int(old.get('property_id',0))!=pid:raise HTTPException(409,'Announcement cannot be moved between PGs')
+  put(s,u.tenant_id,'notice_meta',identifier,{**old,'important':important,'property_id':pid})
+  alert(s,u,'Announcement',f'{property_name(s,u,pid)}: {d["title"]}','announcements',property_id=pid,entity_id=identifier)
+ elif kind=='meal':
+  pid=d['property_id']
+  all_meals=s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='property_meal')).all()
+  existing=next((x for x in all_meals if int(x.payload.get('property_id',0))==pid and x.payload.get('day')==d['day']),None)
+  if creating:
+   identifier=int(existing.key) if existing else secrets.randbelow(2**30)+1
+  else:
+   existing=doc(s,u.tenant_id,'property_meal',identifier)
+   if not existing:
+    # Legacy primary meal record may be edited without modifying other properties.
+    old=s.get(Meal,identifier)
+    if pid!=0 or not old or old.tenant_id!=u.tenant_id:raise HTTPException(404,'Meal not found for this PG')
+   elif int(existing.payload.get('property_id',0))!=pid:
+    raise HTTPException(409,'A meal cannot be moved to a different PG')
+  put(s,u.tenant_id,'property_meal',identifier,d)
  elif kind=='complaint':
-  safe_file(s,u,d['file_id'],'complaint');r=Ticket(tenant_id=u.tenant_id,resident_id=u.id,category=d['category'],description=d['description'],status='submitted');s.add(r);s.flush();identifier=r.id;put(s,u.tenant_id,'ticket_meta',identifier,{'priority':d['priority'],'file_id':d['file_id'],'history':[{'status':'submitted','note':'Complaint submitted','at':iso(now())}]});alert(s,u,'New complaint',d['category'],'complaints',audience='owners')
+  safe_file(s,u,d['file_id'],'complaint');pid=int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))
+  r=Ticket(tenant_id=u.tenant_id,resident_id=u.id,category=d['category'],description=d['description'],status='submitted');s.add(r);s.flush();identifier=r.id
+  put(s,u.tenant_id,'ticket_meta',identifier,{'priority':d['priority'],'property_id':pid,'file_id':d['file_id'],'history':[{'status':'submitted','note':'Complaint submitted','at':iso(now())}]})
+  alert(s,u,'New complaint',f'{property_name(s,u,pid)} · Complaint #{identifier} · {d["category"]}: {d["description"][:120]}','complaints',audience='owners',property_id=pid,entity_id=identifier)
  audit(s,u,kind+('_create' if creating else '_update'),{'id':identifier});commit(s);return {'id':identifier}
 @router.patch('/complaints/{identifier}')
 def change_complaint(identifier:int,data:ComplaintUpdate,u:User=Depends(current),s:Session=Depends(db)):
@@ -483,7 +610,7 @@ def change_complaint(identifier:int,data:ComplaintUpdate,u:User=Depends(current)
  if data.assigned_to:
   staff=tenant_get(s,User,data.assigned_to,u.tenant_id)
   if staff.role!='staff':raise HTTPException(422,'Choose a staff member')
- t.status=data.status;t.assigned_to=data.assigned_to;md=meta(s,u.tenant_id,'ticket_meta',t.id);md['history']=[*md.get('history',[]),{'status':data.status,'note':data.note,'at':iso(now())}];put(s,u.tenant_id,'ticket_meta',t.id,md);alert(s,u,'Complaint updated',data.note,'complaints',user_id=t.resident_id);audit(s,u,'complaint_update',{'id':t.id});commit(s);return {'ok':True}
+ t.status=data.status;t.assigned_to=data.assigned_to;md=meta(s,u.tenant_id,'ticket_meta',t.id);md['history']=[*md.get('history',[]),{'status':data.status,'note':data.note,'at':iso(now())}];put(s,u.tenant_id,'ticket_meta',t.id,md);alert(s,u,'Complaint updated',f'{property_name(s,u,int(md.get("property_id",0)))} · Complaint #{t.id}: {data.note}','complaints',user_id=t.resident_id,property_id=int(md.get('property_id',0)),entity_id=t.id);audit(s,u,'complaint_update',{'id':t.id});commit(s);return {'ok':True}
 class ProofInput(BaseModel):
  invoice_id:int
  amount:Decimal=Field(gt=0,max_digits=12,decimal_places=2)
@@ -542,25 +669,38 @@ def review(identifier:int,data:Review,u:User=Depends(current),s:Session=Depends(
 def read_item(kind:str,identifier:int,u:User=Depends(current),s:Session=Depends(db)):
  if kind not in ('notice','alert'):raise HTTPException(404,'Unknown type')
  model=Notice if kind=='notice' else Alert;row=tenant_get(s,model,identifier,u.tenant_id)
- if kind=='alert' and row.user_id is not None and row.user_id!=u.id:raise HTTPException(403,'Not your notification')
+ if kind=='notice' and not visible_property(s,u,meta(s,u.tenant_id,'notice_meta',identifier).get('property_id',0)):
+  raise HTTPException(404,'Announcement not found')
+ if kind=='alert':
+  allowed=(row.user_id is None or row.user_id==u.id) and (row.audience=='all' or row.audience==u.role or row.audience=='owners' and u.role in ('owner','manager'))
+  if not allowed or not visible_alert(s,u,row):raise HTTPException(404,'Notification not found')
  md=meta(s,u.tenant_id,kind+'_read',u.id);md['ids']=list(set(md.get('ids',[])+[identifier]));put(s,u.tenant_id,kind+'_read',u.id,md);commit(s);return {'ok':True}
 class ChatInput(BaseModel):
+ property_id:int=Field(default=0,ge=0)
  body:str=Field(min_length=1,max_length=2000)
  reply:str=Field(default='',max_length=300)
+@router.get('/community-capabilities')
+def community_capabilities(u:User=Depends(current)):
+ role(u,'owner','manager','resident')
+ return {'property_scoped':True,'message_schema_version':2}
+
 @router.get('/messages')
-def messages(u:User=Depends(current),s:Session=Depends(db)):
- role(u,'owner','manager','resident');return chat_rows(s,u)
+def messages(property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
+ role(u,'owner','manager','resident');chat_access(s,u,property_id);return chat_rows(s,u,property_id)
 @router.post('/messages',status_code=201)
 def send_message(data:ChatInput,u:User=Depends(current),s:Session=Depends(db)):
- role(u,'owner','manager','resident');text=data.body.strip()
+ role(u,'owner','manager','resident');text=data.body.strip();pid=data.property_id
+ chat_access(s,u,pid)
  if not text:raise HTTPException(422,'Message cannot be blank')
- m=ChatMessage(tenant_id=u.tenant_id,author_id=u.id,body=text);s.add(m);s.flush();put(s,u.tenant_id,'message_meta',m.id,{'reply':data.reply})
+ m=ChatMessage(tenant_id=u.tenant_id,author_id=u.id,body=text);s.add(m);s.flush();put(s,u.tenant_id,'message_meta',m.id,{'reply':data.reply,'property_id':pid})
  for recipient in s.scalars(select(User).where(User.tenant_id==u.tenant_id,User.id!=u.id,User.role.in_(['owner','manager','resident']))):
-  alert(s,u,'New community message',f'{u.name}: {text[:90]}','community',user_id=recipient.id)
+  if recipient.role=='resident' and int(meta(s,u.tenant_id,'resident_meta',recipient.id).get('property_id',0))!=pid:continue
+  alert(s,u,'New community message',f'{property_name(s,u,pid)} · {u.name}: {text[:90]}','community',user_id=recipient.id,property_id=pid,entity_id=m.id)
  commit(s);return {'id':m.id}
 @router.patch('/messages/{identifier}')
 def edit_message(identifier:int,data:ChatInput,u:User=Depends(current),s:Session=Depends(db)):
  m=tenant_get(s,ChatMessage,identifier,u.tenant_id);editable(m,u)
+ chat_access(s,u,message_property(s,u,m))
  m.body=data.body.strip()
  if not m.body:raise HTTPException(422,'Message cannot be blank')
  md=meta(s,u.tenant_id,'message_meta',m.id);md['edited']=True;put(s,u.tenant_id,'message_meta',m.id,md);commit(s);return {'ok':True}
@@ -572,6 +712,7 @@ def editable(m,u):
 @router.delete('/messages/{identifier}')
 def delete_message(identifier:int,for_everyone:bool=False,u:User=Depends(current),s:Session=Depends(db)):
  role(u,'owner','manager','resident');m=tenant_get(s,ChatMessage,identifier,u.tenant_id)
+ chat_access(s,u,message_property(s,u,m))
  if for_everyone:editable(m,u);m.deleted=1;m.body=''
  else:
   md=meta(s,u.tenant_id,'message_meta',m.id);md['hidden_by']=list(set(md.get('hidden_by',[])+[u.id]));put(s,u.tenant_id,'message_meta',m.id,md)
@@ -579,17 +720,20 @@ def delete_message(identifier:int,for_everyone:bool=False,u:User=Depends(current
 STORAGE=Path(os.getenv('COMEIN_PRIVATE_STORAGE',str(Path(__file__).parent/'private_uploads')))
 class PaymentQrInput(BaseModel):
  file_id:int
+ property_id:int=Field(default=0,ge=0)
 @router.put('/payment-qr')
 def update_owner_payment_qr(data:PaymentQrInput,u:User=Depends(current),s:Session=Depends(db)):
- role(u,'owner')
+ owner(u);property_exists(s,u,data.property_id)
  safe_file(s,u,data.file_id,'owner_qr')
- put(s,u.tenant_id,'owner_payment_qr','current',{'file_id':data.file_id})
- # Deactivate the legacy external URL, which cannot be authenticated or reliably displayed.
- t=s.get(Tenant,u.tenant_id)
- t.qr_image_url=''
- audit(s,u,'owner_payment_qr_updated',{'file_id':data.file_id})
+ settings=meta(s,u.tenant_id,'property_payment',data.property_id)
+ settings['qr_file_id']=data.file_id
+ put(s,u.tenant_id,'property_payment',data.property_id,settings)
+ if data.property_id==0:
+  put(s,u.tenant_id,'owner_payment_qr','current',{'file_id':data.file_id})
+  s.get(Tenant,u.tenant_id).qr_image_url=''
+ audit(s,u,'owner_payment_qr_updated',{'file_id':data.file_id,'property_id':data.property_id})
  commit(s)
- return {'ok':True,'qr_file_id':data.file_id}
+ return {'ok':True,'qr_file_id':data.file_id,'property_id':data.property_id}
 
 @router.post('/files/{purpose}',status_code=201)
 async def upload(purpose:str,file:UploadFile=File(...),u:User=Depends(current),s:Session=Depends(db)):
@@ -610,7 +754,10 @@ async def upload(purpose:str,file:UploadFile=File(...),u:User=Depends(current),s
 @router.get('/files/{identifier}')
 def download(identifier:int,u:User=Depends(current),s:Session=Depends(db)):
  f=tenant_get(s,PrivateFile,identifier,u.tenant_id)
- permitted=(f.tenant_id==u.tenant_id and u.role in ('owner','manager','resident') if f.purpose=='owner_qr' else f.author_id==u.id or u.role in ('owner','manager'))
+ permitted=(f.author_id==u.id or u.role in ('owner','manager'))
+ if f.purpose=='owner_qr' and u.role=='resident':
+  rp=int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))
+  permitted=(payment_destination(s,u,rp).get('qr_file_id')==f.id)
  if u.role=='staff' and f.purpose=='complaint':
   assigned=s.scalars(select(Ticket).where(Ticket.tenant_id==u.tenant_id,Ticket.assigned_to==u.id)).all();permitted=any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in assigned)
  if not permitted:raise HTTPException(403,'This attachment is private')

@@ -162,7 +162,8 @@ def residents(u:User=Depends(current),session:Session=Depends(db)):
  return [{'id':x.id,'name':x.name,'room':x.room,'email':x.email,'role':x.role} for x in session.scalars(select(User).where(User.tenant_id==u.tenant_id,User.role=='resident')).all()]
 @app.get('/api/notices')
 def notices(u:User=Depends(current),session:Session=Depends(db)):
- return [{'id':n.id,'title':n.title,'body':n.body,'category':n.category,'status':n.status,'created_at':n.created_at.isoformat()} for n in session.scalars(select(Notice).where(Notice.tenant_id==u.tenant_id).order_by(Notice.id.desc())).all()]
+ from v3_api import meta,visible_property
+ return [{'id':n.id,'title':n.title,'body':n.body,'category':n.category,'status':n.status,'created_at':n.created_at.isoformat()} for n in session.scalars(select(Notice).where(Notice.tenant_id==u.tenant_id).order_by(Notice.id.desc())).all() if visible_property(session,u,meta(session,u.tenant_id,'notice_meta',n.id).get('property_id',0))]
 @app.post('/api/notices',status_code=201)
 def notice_create(data:NewNotice,u:User=Depends(current),session:Session=Depends(db)):
  role(u,'owner','manager');n=Notice(tenant_id=u.tenant_id,**data.model_dump());session.add(n);session.commit();return {'id':n.id}

@@ -227,6 +227,11 @@ def _subscription(s, tenant_id):
     return row
 
 
+# New subscriptions and new invoice snapshots use exactly INR 39/resident.
+# Older issued invoices are immutable financial records.
+STAYSYNC_FIXED_RESIDENT_RATE = Decimal('39.00')
+
+
 def _minor(v):
     return str(Decimal(v).quantize(Decimal('.01'), rounding=ROUND_HALF_UP))
 
@@ -264,8 +269,8 @@ def _owner_out(s, t, detail=False):
     owners=s.scalars(select(User).where(User.tenant_id==t.id, User.role=='owner')).all()
     sub=_subscription(s,t.id)
     c=_owner_counts(s,t)
-    billed=Decimal(c['billable_residents'])*sub.price_per_resident
-    out={'id':t.id,'business_name':t.name,'owners':[{'id':u.id,'name':u.name,'email':u.email} for u in owners], 'pg_count':c['pg_count'], 'total_beds':c['total_beds'], 'total_residents':c['total_residents'], 'billable_residents':c['billable_residents'], 'occupancy_percent':c['occupancy_percent'], 'unassigned_rooms':c['unassigned_rooms'],'unassigned_residents':c['unassigned_residents'], 'subscription':{'status':sub.status,'price_per_resident':_minor(sub.price_per_resident),'trial_until':sub.trial_until,'billing_notes':sub.billing_notes,'estimated_monthly':_minor(billed),'currency':'INR'}}
+    billed=Decimal(c['billable_residents'])*STAYSYNC_FIXED_RESIDENT_RATE
+    out={'id':t.id,'business_name':t.name,'owners':[{'id':u.id,'name':u.name,'email':u.email} for u in owners], 'pg_count':c['pg_count'], 'total_beds':c['total_beds'], 'total_residents':c['total_residents'], 'billable_residents':c['billable_residents'], 'occupancy_percent':c['occupancy_percent'], 'unassigned_rooms':c['unassigned_rooms'],'unassigned_residents':c['unassigned_residents'], 'subscription':{'status':sub.status,'price_per_resident':_minor(STAYSYNC_FIXED_RESIDENT_RATE),'trial_until':sub.trial_until,'billing_notes':sub.billing_notes,'estimated_monthly':_minor(billed),'currency':'INR'}}
     if detail:
         out.update({'properties':c['properties'],'rooms':c['rooms'],'residents':c['residents']})
     return out
@@ -485,7 +490,9 @@ def update_subscription(tenant_id:int,data:SubscriptionIn,admin:AdminUser=Depend
     _tenant(s,tenant_id)
     if data.trial_until and not re.fullmatch(r'\d{4}-\d{2}-\d{2}',data.trial_until):raise HTTPException(422,'Trial date must be YYYY-MM-DD')
     row=_subscription(s,tenant_id)
-    row.price_per_resident=data.price_per_resident;row.status=data.status;row.trial_until=data.trial_until;row.billing_notes=data.billing_notes
+    if data.price_per_resident != STAYSYNC_FIXED_RESIDENT_RATE:
+        raise HTTPException(422,'Only the INR 39 per billable resident plan is available')
+    row.price_per_resident=STAYSYNC_FIXED_RESIDENT_RATE;row.status=data.status;row.trial_until=data.trial_until;row.billing_notes=data.billing_notes
     _audit(s,admin,'update_subscription',f'tenant:{tenant_id}')
     s.commit();return _owner_out(s,_tenant(s,tenant_id))['subscription']
 
@@ -513,8 +520,8 @@ def create_invoice(tenant_id:int,data:InvoicePeriodIn,admin:AdminUser=Depends(_r
     if sub.status in ('trial','paused','cancelled'):
         raise HTTPException(409,'Activate subscription to generate a billable invoice')
     cnt=_owner_counts(s,tenant)['billable_residents']
-    subtotal=(sub.price_per_resident*Decimal(cnt)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)
-    i=SubscriptionInvoice(tenant_id=tenant_id,period=data.period,billable_residents=cnt,unit_rate=sub.price_per_resident,subtotal=subtotal,status='draft')
+    subtotal=(STAYSYNC_FIXED_RESIDENT_RATE*Decimal(cnt)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)
+    i=SubscriptionInvoice(tenant_id=tenant_id,period=data.period,billable_residents=cnt,unit_rate=STAYSYNC_FIXED_RESIDENT_RATE,subtotal=subtotal,status='draft')
     s.add(i);s.flush();_audit(s,admin,'create_invoice',f'invoice:{i.id}');s.commit()
     return _invoice_out(i)
 

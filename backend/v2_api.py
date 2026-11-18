@@ -151,7 +151,8 @@ def room_edit(rid:int,data:RoomInput,u:User=Depends(current),s:Session=Depends(d
 
 @router.get('/facilities')
 def facilities(u:User=Depends(current),s:Session=Depends(db)):
- return [facility_out(x) for x in s.scalars(select(Facility).where(Facility.tenant_id==u.tenant_id).order_by(Facility.id.desc()).limit(100)).all()]
+ from v3_api import meta,visible_property
+ return [facility_out(x) for x in s.scalars(select(Facility).where(Facility.tenant_id==u.tenant_id).order_by(Facility.id.desc()).limit(100)).all() if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',x.id).get('property_id',0))]
 @router.post('/facilities',status_code=201)
 def facility_create(data:FacilityInput,u:User=Depends(current),s:Session=Depends(db)):
  owner(u);f=Facility(tenant_id=u.tenant_id,**data.model_dump());s.add(f);s.commit();return facility_out(f)
@@ -160,16 +161,19 @@ def facility_change(fid:int,data:FacilityStatus,u:User=Depends(current),s:Sessio
  owner(u);f=tenant_get(s,Facility,fid,u.tenant_id);f.status=data.status;s.commit();return facility_out(f)
 
 @router.get('/community/messages')
-def messages(after_id:int=Query(default=0,ge=0),u:User=Depends(current),s:Session=Depends(db)):
+def messages(after_id:int=Query(default=0,ge=0),property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
  role(u,'owner','manager','resident')
- query=select(ChatMessage).where(ChatMessage.tenant_id==u.tenant_id,ChatMessage.id>after_id).order_by(ChatMessage.id.desc()).limit(200)
- rows=list(reversed(s.scalars(query).all())); authors={x.id:x.name for x in s.scalars(select(User).where(User.tenant_id==u.tenant_id)).all()}
- return [{'id':m.id,'author_id':m.author_id,'author':authors.get(m.author_id,'Former member'),'body':'[Removed by owner]' if m.deleted else m.body,'deleted':bool(m.deleted),'created_at':m.created_at.replace(tzinfo=timezone.utc).isoformat() if m.created_at.tzinfo is None else m.created_at.isoformat(), 'attachments':[{'id':a.id,'filename':a.filename,'content_type':a.content_type,'size':a.byte_count,'url':f'/api/community/attachments/{a.id}'} for a in s.scalars(select(ChatAttachment).where(ChatAttachment.message_id==m.id,ChatAttachment.tenant_id==u.tenant_id)).all()] if not m.deleted else []} for m in rows]
+ from v3_api import chat_access,chat_rows
+ chat_access(s,u,property_id)
+ return [m for m in chat_rows(s,u,property_id) if m['id']>after_id]
 @router.post('/community/messages',status_code=201)
-def send_message(data:MessageInput,u:User=Depends(current),s:Session=Depends(db)):
- role(u,'owner','manager','resident');text=data.body.strip()
+def send_message(data:MessageInput,property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
+ from v3_api import chat_access,put
+ role(u,'owner','manager','resident');chat_access(s,u,property_id);text=data.body.strip()
  if not text:raise HTTPException(422,'Message is empty')
- msg=ChatMessage(tenant_id=u.tenant_id,author_id=u.id,body=text);s.add(msg);s.commit();return {'id':msg.id}
+ msg=ChatMessage(tenant_id=u.tenant_id,author_id=u.id,body=text);s.add(msg);s.flush()
+ put(s,u.tenant_id,'message_meta',msg.id,{'property_id':property_id})
+ s.commit();return {'id':msg.id}
 # Local private attachments are suitable for development only. Production should use
 # authenticated object storage, malware scanning, encryption, retention and quotas.
 CHAT_STORAGE = Path(os.getenv('COMEIN_CHAT_STORAGE', str(Path(__file__).resolve().parent / 'chat_uploads')))
@@ -177,8 +181,9 @@ CHAT_ALLOWED = {'image/jpeg','image/png','image/webp','application/pdf','text/pl
 CHAT_LIMIT = 10 * 1024 * 1024
 
 @router.post('/community/attachments',status_code=201)
-async def upload_community_attachment(file:UploadFile=File(...),u:User=Depends(current),s:Session=Depends(db)):
- role(u,'owner','manager','resident')
+async def upload_community_attachment(file:UploadFile=File(...),property_id:int=0,u:User=Depends(current),s:Session=Depends(db)):
+ from v3_api import chat_access,put
+ role(u,'owner','manager','resident');chat_access(s,u,property_id)
  mime=(file.content_type or '').lower()
  if mime not in CHAT_ALLOWED:raise HTTPException(415,'Unsupported file type (JPEG, PNG, WebP, PDF, TXT only)')
  filename=Path(file.filename or 'attachment').name[:200]
@@ -204,6 +209,7 @@ async def upload_community_attachment(file:UploadFile=File(...),u:User=Depends(c
  try:
   msg=ChatMessage(tenant_id=u.tenant_id,author_id=u.id,body=f'Attachment: {filename}')
   s.add(msg);s.flush()
+  put(s,u.tenant_id,'message_meta',msg.id,{'property_id':property_id})
   attachment=ChatAttachment(tenant_id=u.tenant_id,message_id=msg.id,filename=filename,storage_key=key,content_type=mime,byte_count=size)
   s.add(attachment);s.commit();s.refresh(attachment)
  except Exception:
@@ -215,6 +221,8 @@ def get_community_attachment(attachment_id:int,u:User=Depends(current),s:Session
  role(u,'owner','manager','resident')
  a=tenant_get(s,ChatAttachment,attachment_id,u.tenant_id)
  msg=tenant_get(s,ChatMessage,a.message_id,u.tenant_id)
+ from v3_api import chat_access,message_property
+ chat_access(s,u,message_property(s,u,msg))
  if msg.deleted:raise HTTPException(404,'Attachment unavailable')
  path=CHAT_STORAGE / str(u.tenant_id) / a.storage_key
  if not path.is_file():raise HTTPException(404,'Attachment unavailable')
@@ -226,7 +234,8 @@ def remove_message(mid:int,u:User=Depends(current),s:Session=Depends(db)):
 
 @router.get('/meals')
 def meals(u:User=Depends(current),s:Session=Depends(db)):
- return [{'id':m.id,'day':m.day,'breakfast':m.breakfast,'lunch':m.lunch,'dinner':m.dinner} for m in s.scalars(select(Meal).where(Meal.tenant_id==u.tenant_id)).all()]
+ from v3_api import meal_rows
+ return meal_rows(s,u)
 @router.put('/meals')
 def meal_save(data:MealInput,u:User=Depends(current),s:Session=Depends(db)):
  owner(u);m=s.scalar(select(Meal).where(Meal.tenant_id==u.tenant_id,Meal.day==data.day))

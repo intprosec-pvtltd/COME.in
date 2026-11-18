@@ -207,11 +207,14 @@ class EntityForm extends StatefulWidget {
       ]!.text))controls[
         f.key
       ]!.text=f.options!.first;
-    }property=(widget.initial[
-      'property_id'
-    ] as num?)?.toInt()??0;
+    }property=(widget.initial['property_id'] as num?)?.toInt()??
+        (['expense','facility','notice','meal','booking'].contains(widget.kind)?-1:0);
   } @override void didChangeDependencies(){
     super.didChangeDependencies();
+    final selected=AppScope.of(context).propertyId;
+    if(property==-1&&selected!=null&&['expense','facility','notice','meal','booking'].contains(widget.kind)){
+      property=selected;
+    }
     if(widget.kind=='expense'&&controls[
       'period'
     ]!.text.isEmpty)controls[
@@ -222,6 +225,10 @@ class EntityForm extends StatefulWidget {
     super.dispose();
   } Future<void> save()async{
     if(!form.currentState!.validate())return;
+    if(['expense','facility','notice','meal','booking'].contains(widget.kind)&&property<0){
+      setState(()=>error='Select the PG property before saving.');
+      return;
+    }
     setState((){
       busy=true;
       error=null;
@@ -240,7 +247,10 @@ class EntityForm extends StatefulWidget {
       'resident',
       'staff',
       'expense',
-      'booking'
+      'booking',
+      'facility',
+      'notice',
+      'meal'
     ].contains(widget.kind))payload[
       'property_id'
     ]=property;
@@ -278,19 +288,18 @@ class EntityForm extends StatefulWidget {
           'resident',
           'staff',
           'expense',
-          'booking'
+          'booking',
+          'facility',
+          'notice',
+          'meal'
         ].contains(widget.kind))... [
           DropdownButtonFormField<int>(isExpanded:true,
-          initialValue:properties.any((p)=>p[
-            'id'
-          ]==property)?property:0,
-          decoration:const InputDecoration(labelText:'Property'),
-          items:properties.map((p)=>DropdownMenuItem(value:p[
-            'id'
-          ]as int,
-          child:Text('${p['name']}',
-          overflow:TextOverflow.ellipsis))).toList(),
-          onChanged:(v)=>setState(()=>property=v??0)),
+          initialValue:properties.any((p)=>p['id']==property)?property:null,
+          decoration:InputDecoration(labelText:widget.kind=='facility'?'Outage affecting PG *':widget.kind=='notice'?'Publish announcement for PG *':widget.kind=='expense'?'Record expense for PG *':widget.kind=='meal'?'Publish meal menu for PG *':widget.kind=='booking'?'Enquiry for PG *':'Property'),
+          hint:const Text('Choose the correct PG'),
+          items:properties.map((p)=>DropdownMenuItem(value:p['id'] as int,
+          child:Text('${p['name']}',overflow:TextOverflow.ellipsis))).toList(),
+          onChanged:(v)=>setState(()=>property=v??-1)),
           const SizedBox(height:16)
         ],
         for(final f in fields)Padding(padding:const EdgeInsets.only(bottom:16),

@@ -190,6 +190,13 @@ Widget propertySelector(BuildContext context){
           style:const TextStyle(color:muted,
           fontSize:11))
         ]),
+        const SizedBox(height:6),
+        Row(children:[
+          const Icon(Icons.apartment_outlined,size:14,color:muted),
+          const SizedBox(width:5),
+          Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'}',
+            style:const TextStyle(color:muted,fontSize:12,fontWeight:FontWeight.w600))),
+        ]),
         const SizedBox(height:13),
         Wrap(spacing:8,
         runSpacing:8,
@@ -409,8 +416,8 @@ Widget propertySelector(BuildContext context){
       onChanged:(v)=>setState(()=>query=v)),
       const SizedBox(height:15),
       for(final r in residents)FeatureTile(title:'${r['name']}',
-      subtitle:'Room ${r['room']} · Bed ${r['bed']??'—'}',
-      icon:Icons.person_outline,
+      subtitle:'${app.find('properties', (r['property_id'] as num?)?.toInt())?['name'] ?? 'PG not assigned'} · Room ${r['room']} · Bed ${r['bed']??'—'}',
+      icon:Icons.apartment_rounded,
       onTap:()=>openPage(context,
       'residentDetail',
       id:r[
@@ -575,6 +582,8 @@ Widget propertySelector(BuildContext context){
           StatusPill('${b['status']}')
         ]),
         const SizedBox(height:10),
+        Text('🏢 ${app.rows('properties').firstWhere((p)=>p['id']==(b['property_id']??0),orElse:()=>{'name':'Primary PG'})['name']}'),
+        const SizedBox(height:5),
         Text('${b['phone']} · Preferred room ${b['room']}'),
         TextButton(onPressed:()=>editEntity(context,
         'booking',
@@ -588,6 +597,9 @@ Widget propertySelector(BuildContext context){
       addButton(context,
       'Add enquiry',
       'booking'),
+      FeatureTile(title:'Approve resident & allocate a bed',
+      icon:Icons.person_add_alt_1_outlined,
+      onTap:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const OwnerInviteResidentPage()))),
       FeatureTile(title:'Room & bed map',
       icon:Icons.bed_outlined,
       onTap:()=>openPage(context,

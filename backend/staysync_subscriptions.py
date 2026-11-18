@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_QR_BYTES = 2 * 1024 * 1024
+FIXED_RESIDENT_RATE_CENTS = 3900  # Single Stay Sync Manage plan: INR 39/month
 
 
 def utcnow() -> str:
@@ -113,9 +114,11 @@ class BillingStore:
                    (actor, action, subject, json.dumps(details), utcnow()))
 
     def set_pricing(self, actor: str, bed_rate: object, resident_rate: object):
-        # The bed-based rate is retained as a compatibility input only.
-        # Enforce resident-only billing even for older API clients.
-        b, r = 0, cents(resident_rate)
+        # Existing admin endpoint remains for older clients; the rate is fixed.
+        # Do not rewrite historical invoice snapshots.
+        b, r = 0, FIXED_RESIDENT_RATE_CENTS
+        if cents(resident_rate) != FIXED_RESIDENT_RATE_CENTS:
+            raise ValueError('Stay Sync Manage has one fixed plan: INR 39 per billable resident')
         with self.lock, self.connect() as db:
             db.execute('INSERT INTO ss_pricing VALUES(1,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET '
                        'bed_rate_cents=excluded.bed_rate_cents,resident_rate_cents=excluded.resident_rate_cents,'
@@ -127,9 +130,9 @@ class BillingStore:
     def pricing(self):
         with self.connect() as db:
             row = db.execute('SELECT * FROM ss_pricing WHERE singleton=1').fetchone()
-        if row is None:
-            return None
-        return {'bed_rate': rupees(0), 'resident_rate': rupees(row['resident_rate_cents'])}
+        # Even existing accounts with older configured rates see the single plan.
+        # Invoice rows issued in earlier months retain their stored amounts.
+        return {'bed_rate': rupees(0), 'resident_rate': rupees(FIXED_RESIDENT_RATE_CENTS)}
 
     def set_qr(self, actor, data, beneficiary, upi_id):
         if not data or len(data) > MAX_QR_BYTES:
@@ -186,15 +189,13 @@ class BillingStore:
                 return dict(existing)
             if legacy_guard and legacy_guard(owner_id, period):
                 raise ValueError('Existing legacy invoice for this owner/month; do not double bill')
-            pricing = db.execute('SELECT * FROM ss_pricing WHERE singleton=1').fetchone()
-            if pricing is None:
-                raise LookupError('Admin must configure pricing first')
-            # Bed count remains a snapshot of capacity, not a billable item.
-            amount = residents * pricing['resident_rate_cents']
+            # New invoices always use the fixed single-plan rate, independent of
+            # legacy ss_pricing values. Beds remain capacity snapshots only.
+            amount = residents * FIXED_RESIDENT_RATE_CENTS
             invoice_id = uuid.uuid4().hex
             db.execute('INSERT INTO ss_invoices VALUES(?,?,?,?,?,?,?,?,?,?)',
                        (invoice_id,owner_id,period,beds,residents,0,
-                        pricing['resident_rate_cents'],amount,'unpaid',utcnow()))
+                        FIXED_RESIDENT_RATE_CENTS,amount,'unpaid',utcnow()))
             self.audit(db,'system','invoice_created',invoice_id,{'owner_id':owner_id,'period':period,'amount_cents':amount})
             return dict(db.execute('SELECT * FROM ss_invoices WHERE id=?',(invoice_id,)).fetchone())
 
@@ -301,7 +302,7 @@ class Review(BaseModel):
     remarks: str = Field(default='',max_length=500)
 
 
-def create_router(store:BillingStore, principal_dependency:Callable, count_provider:Callable[[str],tuple[int,int]], legacy_guard=None, activate_payment=None):
+def create_router(store:BillingStore, principal_dependency:Callable, count_provider:Callable[[str],tuple[int,int]], legacy_guard=None, activate_payment=None, legacy_invoice_provider=None):
     """principal_dependency MUST return {'id':str,'role':'platform_admin'|'owner', 'owner_id':str optional}.
     count_provider(owner_id) MUST use existing authoritative app records and exclude inactive residents.
     Both must be implemented by the host application before mounting this router.
@@ -356,7 +357,12 @@ def create_router(store:BillingStore, principal_dependency:Callable, count_provi
 
     @router.get('/me')
     def my_subscription(p=Depends(owner)):
-        return {'pricing':store.pricing(),'qr':store.qr(),'invoices':store.invoices(p['owner_id']),
+        beds, residents = count_provider(p['owner_id'])
+        if not all(isinstance(x, int) and x >= 0 for x in (beds, residents)):
+            raise HTTPException(503, 'Resident count unavailable')
+        return {'pricing':store.pricing(),'qr':store.qr(),'billable_residents':residents,
+                'beds':beds,'invoices':store.invoices(p['owner_id']),
+                'legacy_invoice':legacy_invoice_provider(p['owner_id']) if legacy_invoice_provider else None,
                 'payments':store.submissions(p['owner_id'])}
 
     @router.post('/me/invoice/{period}')

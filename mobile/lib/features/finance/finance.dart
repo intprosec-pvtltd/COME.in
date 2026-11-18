@@ -35,6 +35,16 @@ Map<String, dynamic>? latestInvoiceProof(
   return matching.last;
 }
 
+// Resolve PG labels from the resident's assigned property, not room number.
+String pgNameForResident(AppController app, Map<String, dynamic>? resident) {
+  if (resident == null) return 'PG not assigned';
+  final propertyId = int.tryParse('${resident['property_id'] ?? ''}');
+  if (propertyId == null) return 'PG not assigned';
+  final pg = app.find('properties', propertyId);
+  if (pg == null) return 'PG not assigned';
+  return '${pg['name'] ?? 'PG'}';
+}
+
 /// Only owner-approved payments count as paid; uploaded proofs do not.
 double verifiedAmount(Map<String, dynamic> invoice) => amount(invoice['paid']);
 
@@ -124,6 +134,17 @@ dynamic>> scopedInvoices(AppController app){
           style:const TextStyle(fontWeight:FontWeight.w800))),
           StatusPill(invoiceReviewStatus(i,payments))
         ]),
+        if(app.owner)...[
+          const SizedBox(height:7),
+          Row(children:[
+            const Icon(Icons.apartment_rounded, size:16, color:lavender),
+            const SizedBox(width:6),
+            Expanded(child:Text(
+              pgNameForResident(app, app.find('residents', (i['resident_id'] as num?)?.toInt())),
+              style:const TextStyle(fontSize:12, color:muted, fontWeight:FontWeight.w700),
+            )),
+          ]),
+        ],
         const SizedBox(height:12),
         Text(tr(context,'Amount paid'),
           style:const TextStyle(fontSize:12,color:muted,fontWeight:FontWeight.w600)),
@@ -383,6 +404,7 @@ class _ResidentOwnerPaymentPreview extends StatelessWidget {
       if(holder.isNotEmpty)Text(holder,style:const TextStyle(fontWeight:FontWeight.w700)),
       if(upi.isNotEmpty)Text('UPI: $upi',style:const TextStyle(fontSize:12,color:muted)),
       if(bank.isNotEmpty)Text('Bank: $bank',style:const TextStyle(fontSize:12,color:muted)),
+      if('${d['bank_account']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account']}',style:const TextStyle(fontSize:12,color:muted)),
       if(d['qr_file_id'] is int) Padding(padding:const EdgeInsets.symmetric(vertical:10),
         child:FutureBuilder<Uint8List>(
           future:app.api.download('/v3/files/${d['qr_file_id']}'),
@@ -679,52 +701,110 @@ int id)async{
       ]
     ]);
   }
-} class ExpensesPage extends StatelessWidget {
-  const ExpensesPage({
-    super.key
-  });
+} class ExpensesPage extends StatefulWidget {
+  const ExpensesPage({super.key});
+  @override State<ExpensesPage> createState()=>_ExpensesPageState();
+} class _ExpensesPageState extends State<ExpensesPage> {
+  final form=GlobalKey<FormState>();
+  final description=TextEditingController();
+  final amountController=TextEditingController();
+  String category='Utilities';
+  bool saving=false;
+  String? error;
+  int? entryProperty;
+
+  @override void dispose(){
+    description.dispose();
+    amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> saveExpense(AppController app)async{
+    if(!(form.currentState?.validate()??false))return;
+    final properties=app.rows('properties');
+    final pid=entryProperty??app.propertyId;
+    if(pid==null||!properties.any((p)=>p['id']==pid)){
+      setState(()=>error='Select the PG for this expense.');return;
+    }
+    setState((){saving=true;error=null;});
+    try{
+      await app.save('expense',{
+        'property_id':pid,
+        'description':description.text.trim(),
+        'category':category,
+        'amount':num.parse(amountController.text.trim()),
+        'period':app.period,
+      });
+      if(!mounted)return;
+      description.clear();amountController.clear();
+      setState(()=>entryProperty=pid);
+      feedback(context,'Expense saved to selected PG');
+    }catch(e){
+      if(mounted)setState(()=>error='$e');
+    }finally{
+      if(mounted)setState(()=>saving=false);
+    }
+  }
+
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
-    final rows=app.scoped('expenses').where((r)=>r[
-      'period'
-    ]==app.period).toList();
-    return PageBody(title:'Expenses & cashflow',
-    refresh:app.refresh,
-    children:[
+    final properties=app.rows('properties').where((p)=>p['archived']!=true).toList();
+    final pid=entryProperty??app.propertyId;
+    final validPid=properties.any((p)=>p['id']==pid)?pid:null;
+    final rows=app.scoped('expenses').where((r)=>r['period']==app.period).toList();
+    return PageBody(title:'Expenses & cashflow',refresh:app.refresh,children:[
+      Surface(child:Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('Record an expense',style:TextStyle(fontSize:18,fontWeight:FontWeight.w800)),
+        const SizedBox(height:5),
+        const Text('Choose the PG receiving this expense. Each expense is recorded against that PG.',
+          style:TextStyle(fontSize:12,color:muted)),
+        const SizedBox(height:16),
+        DropdownButtonFormField<int>(isExpanded:true,initialValue:validPid,
+          decoration:const InputDecoration(labelText:'Expense for PG *'),
+          hint:const Text('Select PG property'),
+          items:properties.map((p)=>DropdownMenuItem<int>(value:p['id'] as int,
+            child:Text('${p['name']}',overflow:TextOverflow.ellipsis))).toList(),
+          validator:(v)=>v==null?'Select the PG':null,
+          onChanged:saving?null:(v)=>setState(()=>entryProperty=v)),
+        const SizedBox(height:12),
+        TextFormField(controller:description,decoration:const InputDecoration(labelText:'Expense description *'),
+          validator:(v)=>(v?.trim().isEmpty??true)?'Enter a description':null),
+        const SizedBox(height:12),
+        DropdownButtonFormField<String>(initialValue:category,isExpanded:true,
+          decoration:const InputDecoration(labelText:'Category *'),
+          items:['Utilities','Operations','Food','Maintenance','General']
+            .map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),
+          onChanged:saving?null:(v)=>setState(()=>category=v??'Utilities')),
+        const SizedBox(height:12),
+        TextFormField(controller:amountController,keyboardType:const TextInputType.numberWithOptions(decimal:true),
+          decoration:const InputDecoration(labelText:'Amount (₹) *'),
+          validator:(v){final a=num.tryParse(v?.trim()??'');
+            return a==null||!a.isFinite||a<=0?'Enter a valid positive amount':null;}),
+        const SizedBox(height:10),
+        Text('Reporting month: ${app.period}',style:const TextStyle(color:muted,fontSize:12)),
+        if(error!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(error!,style:const TextStyle(color:Colors.red))),
+        const SizedBox(height:14),
+        SizedBox(width:double.infinity,child:FilledButton.icon(
+          onPressed:saving?null:()=>saveExpense(app),
+          icon:const Icon(Icons.add),
+          label:Text(saving?'Saving…':'Save expense to PG'))),
+      ]))),
+      const SizedBox(height:12),
+      const Text('Recorded expenses',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
       propertySelector(context),
       periodSelector(context),
       HeroCard(label:'Recorded operating expenses',
-      value:inr(rows.fold<double>(0,
-      (s,
-      r)=>s+amount(r[
-        'amount'
-      ])))),
-      for(final r in rows)Surface(onTap:()=>editEntity(context,
-      'expense',
-      id:r[
-        'id'
-      ]as int,
-      initial:r),
-      child:Row(children:[
-        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-        children:[
-          Text('${r['description']}',
-          style:const TextStyle(fontWeight:FontWeight.w800)),
-          Text('${r['category']}',
-          style:const TextStyle(color:muted,
-          fontSize:11))
+        value:inr(rows.fold<double>(0,(s,r)=>s+amount(r['amount'])))),
+      for(final r in rows)Surface(onTap:()=>editEntity(context,'expense',id:r['id'] as int,initial:r),
+        child:Row(children:[
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('${r['description']}',style:const TextStyle(fontWeight:FontWeight.w800)),
+            Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'} · ${r['category']}',
+              style:const TextStyle(color:muted,fontSize:11))])),
+          Text(inr(r['amount']),style:const TextStyle(fontWeight:FontWeight.w800)),
+          const Icon(Icons.edit_outlined,size:17)
         ])),
-        Text(inr(r[
-          'amount'
-        ]),
-        style:const TextStyle(fontWeight:FontWeight.w800)),
-        const Icon(Icons.edit_outlined,
-        size:17)
-      ])),
-      if(rows.isEmpty)const EmptyState('No expenses in this period.'),
-      addButton(context,
-      'Add expense',
-      'expense')
+      if(rows.isEmpty)const EmptyState('No expenses for this period.'),
     ]);
   }
 } class ReportsPage extends StatefulWidget {
@@ -803,8 +883,8 @@ int id)async{
       ]else if(tab=='Occupancy')HeroCard(label:'Occupancy',
       value:'${beds==0?0:(app.scoped('residents').where((r)=>'${r['room']}'.isNotEmpty).length/beds*100).round()}%',
       detail:'${app.scoped('residents').length} residents · $beds beds')else if(tab=='Residents')... app.scoped('residents').map((r)=>FeatureTile(title:'${r['name']}',
-      subtitle:'Room ${r['room']}',
-      icon:Icons.person_outline,
+      subtitle:'${pgNameForResident(app, r)} · Room ${r['room']}',
+      icon:Icons.apartment_rounded,
       onTap:()=>openPage(context,
       'residentDetail',
       id:r[
@@ -919,18 +999,29 @@ int id)async{
   };
   bool editing=false,
   busy=false;
+  int? selectedPaymentProperty;
   @override void dispose(){
     for(final c in controls.values)c.dispose();
     super.dispose();
   }@override Widget build(BuildContext context){
     final app=AppScope.of(context),
-    d=app.data[
-      'payment_methods'
-    ]as Map? ?? {
-    };
+    pid=selectedPaymentProperty??app.propertyId??0;
+    final methods=(app.data['property_payment_methods'] as List? ?? const []);
+    final d=app.owner
+      ? (methods.where((x)=>x is Map && x['property_id']==pid).isNotEmpty
+          ? Map<String,dynamic>.from(methods.firstWhere((x)=>x is Map && x['property_id']==pid) as Map)
+          : <String,dynamic>{})
+      : Map<String,dynamic>.from(app.data['payment_methods'] as Map? ?? {});
     return PageBody(title:'Owner payment details',
     subtitle:'Verify the recipient in your UPI / bank app before paying.',
     children:[
+      if(app.owner)DropdownButtonFormField<int>(
+        isExpanded:true,
+        initialValue:pid,
+        decoration:const InputDecoration(labelText:'Payment account for PG *'),
+        items:app.rows('properties').where((p)=>p['archived']!=true).map((p)=>DropdownMenuItem<int>(value:(p['id'] as num).toInt(),child:Text('🏢 ${p['name']}'))).toList(),
+        onChanged:(v){if(v==null)return;setState((){selectedPaymentProperty=v;editing=false;});}),
+      const SizedBox(height:12),
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
         const Text('Pay directly to your PG owner', style:TextStyle(fontWeight:FontWeight.w800, fontSize:16)),
@@ -942,7 +1033,7 @@ int id)async{
         ],
         if('${d['bank_holder']??''}'.trim().isNotEmpty)Text('Account holder: ${d['bank_holder']}'),
         if('${d['bank_name']??''}'.trim().isNotEmpty)Text('Bank: ${d['bank_name']}'),
-        if('${d['bank_account_masked']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account_masked']}'),
+        if('${d['bank_account']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account']}')else if('${d['bank_account_masked']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account_masked']}'),
         if('${d['ifsc']??''}'.trim().isNotEmpty)Text('IFSC: ${d['ifsc']}'),
         if(d['qr_file_id'] is int)Padding(padding:const EdgeInsets.only(top:14),
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -986,7 +1077,7 @@ int id)async{
               if(f.bytes!.length>5*1024*1024)throw Exception('QR image must be smaller than 5 MB');
               final app=AppScope.of(context);
               final uploaded=await app.api.upload('/v3/files/owner_qr',f.name,f.bytes!,mimeType(f.name));
-              await app.mutate('/v3/payment-qr',method:'PUT',body:{'file_id':(uploaded as Map)['id']});
+              await app.mutate('/v3/payment-qr',method:'PUT',body:{'file_id':(uploaded as Map)['id'],'property_id':pid});
               if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Owner QR image updated')));
             }catch(e){if(mounted)feedback(context,e);}
             finally{if(mounted)setState(()=>busy=false);}
@@ -999,16 +1090,17 @@ int id)async{
           for(final e in controls.entries)Padding(padding:const EdgeInsets.only(bottom:15),
           child:TextFormField(controller:e.value,
           decoration:InputDecoration(labelText:switch(e.key){'upi_id'=>'UPI ID','bank_holder'=>'Account holder','bank_name'=>'Bank name','bank_account'=>'Account number','ifsc'=>'IFSC',_=>e.key}),
-          validator:(v)=>e.key=='bank_account'&&(v??'').isEmpty?'Enter the full account number to save':null)),
+          validator:(v)=>null)),
           FilledButton(onPressed:busy?null:()async{
             if(!form.currentState!.validate())return;
             if(!await ask(context,
             'Save these payment destination details?')||!context.mounted)return;
             setState(()=>busy=true);
             final ok=await perform(context,
-            ()=>app.mutate('/payment-methods',
+            ()=>app.mutate('/v3/property-payment',
             method:'PUT',
             body:{
+              'property_id':pid,
               for(final e in controls.entries)e.key:e.value.text.trim()
             }),
             success:'Payment settings saved');
@@ -1017,7 +1109,7 @@ int id)async{
               if(ok)editing=false;
             });
           },
-          child:Text(busy?'Saving…':'Save payment details'))
+          child:Text(busy?'Saving…':'Save payment details for this PG'))
         ])))
       ]
     ]);
