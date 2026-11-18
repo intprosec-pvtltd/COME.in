@@ -182,23 +182,41 @@ def recovery_digest(code):
  return hashlib.sha256((SECRET+code).encode()).hexdigest()
 
 def send_recovery_email(email,code):
- import smtplib,ssl
- from email.message import EmailMessage
- host=os.getenv('SMTP_HOST','');sender=os.getenv('SMTP_FROM',os.getenv('SMTP_USER',''))
- if not host or not sender:raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
- message=EmailMessage();message['From']=sender;message['To']=email;message['Subject']='COME.in password reset code'
- message.set_content(f'Your COME.in password reset code is {code}. It expires in 15 minutes. If you did not request this, ignore this email.')
- try:
-  port=int(os.getenv('SMTP_PORT','587'))
-  with smtplib.SMTP(host,port,timeout=15) as smtp:
-   smtp.starttls(context=ssl.create_default_context())
-   if os.getenv('SMTP_USER'):smtp.login(os.environ['SMTP_USER'],os.getenv('SMTP_PASSWORD',''))
-   smtp.send_message(message)
- except Exception as exc:raise HTTPException(503,'Recovery email could not be delivered. Try again later.') from exc
+  """Send reset code over HTTPS on Render Free; preserve SMTP fallback for other hosts."""
+  from email.message import EmailMessage
+  sender=os.getenv('RESET_EMAIL_FROM','').strip() or os.getenv('SMTP_FROM','').strip() or os.getenv('SMTP_USER','').strip()
+  key=os.getenv('RESEND_API_KEY','').strip()
+  if not sender or not (key or os.getenv('SMTP_HOST','').strip()):
+   raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
+  subject='Stay Sync Manage password reset code'
+  body=(f'Your Stay Sync Manage password reset code is {code}. '
+        'It expires in 15 minutes. If you did not request this, ignore this email.')
+  if key:
+   import urllib.request, urllib.error
+   payload=json.dumps({'from':sender,'to':[email],'subject':subject,'text':body}).encode('utf-8')
+   request=urllib.request.Request('https://api.resend.com/emails',data=payload,method='POST',headers={
+    'Authorization':f'Bearer {key}','Content-Type':'application/json','User-Agent':'StaySyncManage/1.0'})
+   try:
+    with urllib.request.urlopen(request,timeout=15) as response:
+     if not 200<=response.status<300:raise RuntimeError('Email provider rejected the request')
+    return
+   except Exception as exc:
+    raise HTTPException(503,'Recovery email could not be delivered. Try again later.') from exc
+  import smtplib,ssl
+  message=EmailMessage();message['From']=sender;message['To']=email;message['Subject']=subject
+  message.set_content(body)
+  try:
+   port=int(os.getenv('SMTP_PORT','587'))
+   with smtplib.SMTP(os.environ['SMTP_HOST'],port,timeout=15) as smtp:
+    smtp.starttls(context=ssl.create_default_context())
+    if os.getenv('SMTP_USER'):smtp.login(os.environ['SMTP_USER'],os.getenv('SMTP_PASSWORD',''))
+    smtp.send_message(message)
+  except Exception as exc:
+   raise HTTPException(503,'Recovery email could not be delivered. Try again later.') from exc
 
 @router.post('/forgot-password')
 def forgot(data:RecoveryRequest,s:Session=Depends(db)):
- if not os.getenv('SMTP_HOST') or not os.getenv('SMTP_FROM',os.getenv('SMTP_USER')):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
+ if not (os.getenv('RESEND_API_KEY') or os.getenv('SMTP_HOST')) or not (os.getenv('RESET_EMAIL_FROM') or os.getenv('SMTP_FROM') or os.getenv('SMTP_USER')):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
  email=safe_email(data.email);u=s.scalar(select(User).where(User.email==email))
  if u:
   old=meta(s,u.tenant_id,'recovery',u.id)
