@@ -186,11 +186,39 @@ def send_recovery_email(email,code):
   from email.message import EmailMessage
   sender=os.getenv('RESET_EMAIL_FROM','').strip() or os.getenv('SMTP_FROM','').strip() or os.getenv('SMTP_USER','').strip()
   key=os.getenv('RESEND_API_KEY','').strip()
-  if not sender or not (key or os.getenv('SMTP_HOST','').strip()):
+  mailjet_key=os.getenv('MAILJET_API_KEY','').strip()
+  mailjet_secret=os.getenv('MAILJET_SECRET_KEY','').strip()
+  mailjet_sender=os.getenv('MAILJET_FROM_EMAIL','').strip()
+  mailjet_ready=bool(mailjet_key and mailjet_secret and mailjet_sender)
+  if not (mailjet_ready or (sender and (key or os.getenv('SMTP_HOST','').strip()))):
    raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
   subject='Stay Sync Manage password reset code'
   body=(f'Your Stay Sync Manage password reset code is {code}. '
         'It expires in 15 minutes. If you did not request this, ignore this email.')
+  if mailjet_ready:
+   import base64, urllib.request, urllib.error
+   auth=base64.b64encode(f'{mailjet_key}:{mailjet_secret}'.encode('utf-8')).decode('ascii')
+   payload={'Messages':[{'From':{'Email':mailjet_sender,'Name':os.getenv('MAILJET_FROM_NAME','Stay Sync Manage').strip() or 'Stay Sync Manage'},
+                         'To':[{'Email':email}], 'Subject':subject, 'TextPart':body}]}
+   request=urllib.request.Request('https://api.mailjet.com/v3.1/send',
+       data=json.dumps(payload).encode('utf-8'),method='POST',
+       headers={'Authorization':f'Basic {auth}','Content-Type':'application/json',
+                'User-Agent':'StaySyncManage/1.0'})
+   try:
+    with urllib.request.urlopen(request,timeout=15) as response:
+     if not 200<=response.status<300:
+      raise RuntimeError('Mailjet rejected email request')
+     result=json.loads(response.read().decode('utf-8'))
+    messages=result.get('Messages',[])
+    if not messages or any(m.get('Status')!='success' for m in messages):
+     raise RuntimeError('Mailjet did not accept email message')
+    return
+   except Exception as exc:
+    # Never return provider credentials or password reset codes to the caller.
+    import logging
+    logging.getLogger(__name__).warning('Mailjet recovery delivery failed (%s)',
+        getattr(getattr(exc,'code',None),'value',None) or getattr(exc,'code',type(exc).__name__))
+    raise HTTPException(503,'Recovery email could not be delivered. Try again later.') from exc
   if key:
    import urllib.request, urllib.error
    payload=json.dumps({'from':sender,'to':[email],'subject':subject,'text':body}).encode('utf-8')
@@ -216,7 +244,7 @@ def send_recovery_email(email,code):
 
 @router.post('/forgot-password')
 def forgot(data:RecoveryRequest,s:Session=Depends(db)):
- if not (os.getenv('RESEND_API_KEY') or os.getenv('SMTP_HOST')) or not (os.getenv('RESET_EMAIL_FROM') or os.getenv('SMTP_FROM') or os.getenv('SMTP_USER')):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
+ if not ((os.getenv('MAILJET_API_KEY') and os.getenv('MAILJET_SECRET_KEY') and os.getenv('MAILJET_FROM_EMAIL')) or ((os.getenv('RESEND_API_KEY') or os.getenv('SMTP_HOST')) and (os.getenv('RESET_EMAIL_FROM') or os.getenv('SMTP_FROM') or os.getenv('SMTP_USER')))):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
  email=safe_email(data.email);u=s.scalar(select(User).where(User.email==email))
  if u:
   old=meta(s,u.tenant_id,'recovery',u.id)
