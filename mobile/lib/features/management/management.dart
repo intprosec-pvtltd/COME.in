@@ -149,23 +149,34 @@ Widget propertySelector(BuildContext context){
   String floor='All';
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
-    final rooms=app.scoped('rooms').where((r)=>floor=='All'||(r[
-      'floor'
-    ]??'Ground')==floor).toList();
+    final allRooms=app.scoped('rooms');
+    // Build floor choices from rooms belonging to the currently selected PG.
+    // No fixed number of floors is assumed.
+    final availableFloors=allRooms
+        .map((r)=>(r['floor']??'Ground').toString().trim())
+        .map((f)=>f.isEmpty?'Ground':f)
+        .toSet().toList();
+    availableFloors.sort((a,b){
+      if(a=='Ground')return -1;
+      if(b=='Ground')return 1;
+      final ai=int.tryParse(RegExp(r'^(?:Floor\s+)?(\d+)$',caseSensitive:false).firstMatch(a)?.group(1)??'');
+      final bi=int.tryParse(RegExp(r'^(?:Floor\s+)?(\d+)$',caseSensitive:false).firstMatch(b)?.group(1)??'');
+      if(ai!=null&&bi!=null)return ai.compareTo(bi);
+      if(ai!=null)return -1;
+      if(bi!=null)return 1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    final selectedFloor=floor=='All'||availableFloors.contains(floor)?floor:'All';
+    final rooms=allRooms.where((r)=>selectedFloor=='All'||
+      ((r['floor']??'Ground').toString().trim().isEmpty?'Ground':(r['floor']??'Ground').toString().trim())==selectedFloor).toList();
     return PageBody(title:'Rooms & beds',
     refresh:app.refresh,
     children:[
       propertySelector(context),
       Wrap(spacing:7,
       children:[
-        for(final f in [
-          'All',
-          'Ground',
-          'Floor 1',
-          'Floor 2',
-          'Floor 3'
-        ])ChoiceChip(label:Text(f),
-        selected:floor==f,
+        for(final f in ['All',...availableFloors])ChoiceChip(label:Text(f),
+        selected:selectedFloor==f,
         onSelected:(_)=>setState(()=>floor=f))
       ]),
       const SizedBox(height:15),

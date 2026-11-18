@@ -39,14 +39,11 @@ class FieldSpec {
   'room'=>const [
     FieldSpec('name',
     'Room number'),
+    // Free-text floor accepts Ground, Floor 4, Floor 10, Basement, etc.
+    // Filters in Rooms & beds will appear from actual saved room records.
     FieldSpec('floor',
-    'Floor',
-    options:[
-      'Ground',
-      'Floor 1',
-      'Floor 2',
-      'Floor 3'
-    ]),
+    'Floor (e.g. Ground, Floor 4)',
+    defaultValue:'Ground'),
     FieldSpec('beds',
     'Bed capacity',
     number:true,

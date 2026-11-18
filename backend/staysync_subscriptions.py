@@ -113,7 +113,9 @@ class BillingStore:
                    (actor, action, subject, json.dumps(details), utcnow()))
 
     def set_pricing(self, actor: str, bed_rate: object, resident_rate: object):
-        b, r = cents(bed_rate), cents(resident_rate)
+        # The bed-based rate is retained as a compatibility input only.
+        # Enforce resident-only billing even for older API clients.
+        b, r = 0, cents(resident_rate)
         with self.lock, self.connect() as db:
             db.execute('INSERT INTO ss_pricing VALUES(1,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET '
                        'bed_rate_cents=excluded.bed_rate_cents,resident_rate_cents=excluded.resident_rate_cents,'
@@ -127,7 +129,7 @@ class BillingStore:
             row = db.execute('SELECT * FROM ss_pricing WHERE singleton=1').fetchone()
         if row is None:
             return None
-        return {'bed_rate': rupees(row['bed_rate_cents']), 'resident_rate': rupees(row['resident_rate_cents'])}
+        return {'bed_rate': rupees(0), 'resident_rate': rupees(row['resident_rate_cents'])}
 
     def set_qr(self, actor, data, beneficiary, upi_id):
         if not data or len(data) > MAX_QR_BYTES:
@@ -187,10 +189,11 @@ class BillingStore:
             pricing = db.execute('SELECT * FROM ss_pricing WHERE singleton=1').fetchone()
             if pricing is None:
                 raise LookupError('Admin must configure pricing first')
-            amount = beds*pricing['bed_rate_cents'] + residents*pricing['resident_rate_cents']
+            # Bed count remains a snapshot of capacity, not a billable item.
+            amount = residents * pricing['resident_rate_cents']
             invoice_id = uuid.uuid4().hex
             db.execute('INSERT INTO ss_invoices VALUES(?,?,?,?,?,?,?,?,?,?)',
-                       (invoice_id,owner_id,period,beds,residents,pricing['bed_rate_cents'],
+                       (invoice_id,owner_id,period,beds,residents,0,
                         pricing['resident_rate_cents'],amount,'unpaid',utcnow()))
             self.audit(db,'system','invoice_created',invoice_id,{'owner_id':owner_id,'period':period,'amount_cents':amount})
             return dict(db.execute('SELECT * FROM ss_invoices WHERE id=?',(invoice_id,)).fetchone())
@@ -283,7 +286,8 @@ class BillingStore:
 
 
 class Rates(BaseModel):
-    bed_rate: Decimal = Field(ge=0,le=1000000)
+    # Optional for new clients; accepted but ignored for old clients.
+    bed_rate: Decimal = Field(default=Decimal('0'),ge=0,le=1000000)
     resident_rate: Decimal = Field(ge=0,le=1000000)
 
 

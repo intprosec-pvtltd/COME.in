@@ -417,3 +417,14 @@ body,.app-shell { background:linear-gradient(135deg,#fdf9ff 0%,#fff8fd 60%,#fff5
 .sidebar-head { padding-bottom:0 !important; }
 /* END_STAYSYNC_ADMIN_CLEANUP_20261118 */
 
+
+/* Stay Sync Manage: readable per-page explanations and clearer table text */
+.page-guide{display:flex;align-items:flex-start;gap:13px;margin:0 0 23px;padding:16px 19px;background:#f3edfb;border:1px solid #e7d8f4;border-radius:15px;color:#442454;}
+.page-guide-icon{display:grid;place-items:center;flex:0 0 35px;height:35px;border-radius:10px;background:#e7d5f7;color:#6b3990;}
+.page-guide strong{display:block;font-size:14px;font-weight:800;margin:1px 0 5px;}
+.page-guide p{margin:0;font-size:13px;line-height:1.65;color:#62476d;max-width:1050px;}
+.table-scroll th{font-size:11px;letter-spacing:.2px;line-height:1.45;white-space:normal;}
+.table-scroll td{font-size:13px;line-height:1.5;}
+.stat small{font-size:11.5px;line-height:1.5;}
+.tag{font-size:11px;}
+@media(max-width:700px){.page-guide{padding:13px}.page-guide p{font-size:12px;}}

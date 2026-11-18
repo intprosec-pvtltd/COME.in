@@ -13,14 +13,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final PageController pages = PageController();
   int index = 0;
   static const titles = [
-    'A fresh start, a place to belong.',
-    'Make every day feel like home.',
-    'Your PG life, all in one place.',
+    'Manage your PG, all in one place.',
+    'Simplify rent and payment management.',
+    'Manage better. Stay connected.',
   ];
   static const descriptions = [
-    'Move in with confidence. Settle into a welcoming space and start your next chapter.',
-    'Connect with roommates, stay in the loop, and feel at home from day one.',
-    'Track rent, raise requests, see announcements, and connect with your community in one app.',
+    'Effortlessly manage rooms, beds, residents and daily operations through one simple, organized platform.',
+    'Track rent, manage payments, monitor dues and keep financial records organized with ease.',
+    'Handle maintenance requests, share announcements and keep owners, residents and staff connected.',
   ];
   @override
   void dispose() { pages.dispose(); super.dispose(); }
@@ -41,7 +41,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(children: [
             SizedBox(height: 60, child: Row(children: [
-              const OfficialBrand(width: 154),
+              Transform.translate(offset: const Offset(-18, 0), child: const OfficialBrand(width: 124)),
               const Spacer(),
               TextButton(onPressed: () => AppScope.of(context).finishOnboarding(),
                 child: const Text('Skip', style: TextStyle(fontWeight: FontWeight.w700))),
@@ -150,8 +150,17 @@ class SignInScreen extends StatefulWidget {
           softWrap:true,
           style:const TextStyle(fontSize:29,fontWeight:FontWeight.w900,height:1.12,color:plum)),
         const SizedBox(height:4),
-        Text(tr(context,'Same spaces. Brighter days.'),textAlign:TextAlign.center,
-          style:const TextStyle(fontSize:14,color:Color(0xFF84718B))),
+        // Readable contrast on both bright and dark areas of the login illustration.
+        Container(
+          padding:const EdgeInsets.symmetric(horizontal:14,vertical:6),
+          decoration:BoxDecoration(
+            color:const Color(0xEEFFFFFF),
+            borderRadius:BorderRadius.circular(18),
+            boxShadow:const [BoxShadow(color:Color(0x24000000),blurRadius:8,offset:Offset(0,2))],
+          ),
+          child:Text(tr(context,'Same spaces. Brighter days.'),textAlign:TextAlign.center,
+            style:const TextStyle(fontSize:14,fontWeight:FontWeight.w700,color:Color(0xFF351339))),
+        ),
         const SizedBox(height:12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
           _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
@@ -317,7 +326,7 @@ class SignInScreen extends StatefulWidget {
     Surface(child:Column(children:[
       TextField(controller:email,
       keyboardType:TextInputType.emailAddress,
-      decoration:const InputDecoration(labelText:'Email or phone',prefixIcon:Icon(Icons.mail_outline))),
+      decoration:const InputDecoration(labelText:'Email address',prefixIcon:Icon(Icons.mail_outline))),
       const SizedBox(height:15),
       FilledButton(onPressed:busy?null:()async{
         setState(()=>busy=true);
@@ -338,7 +347,7 @@ class SignInScreen extends StatefulWidget {
           if(mounted)setState(()=>busy=false);
         }
       },
-      child:Text(busy?'Requesting…':'Request reset')),
+      child:Text(busy?'Requesting...':'Request reset')),
       if(message!=null)Padding(padding:const EdgeInsets.only(top:15),
       child:Text(message!))
     ]))
@@ -427,7 +436,7 @@ class SignInScreen extends StatefulWidget {
           if(ok)Navigator.of(context).popUntil((r)=>r.isFirst);
         }
       },
-      child:Text(busy?'Updating…':'Reset password'))
+      child:Text(busy?'Updating...':'Reset password'))
     ])))
   ]);
 }
@@ -523,7 +532,7 @@ class _AuthBrand extends StatelessWidget {
   Widget build(BuildContext context)=>Image.asset(
     'assets/branding/stay_sync_logo_transparent.png',
     width:190,height:124,fit:BoxFit.contain,
-    semanticLabel:'COME.in — Spaces People Belong',
+    semanticLabel:'COME.in â€” Spaces People Belong',
   );
 }
 class _AuthField extends StatelessWidget {
