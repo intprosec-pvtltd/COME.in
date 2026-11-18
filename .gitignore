@@ -91,3 +91,5 @@ dist/
 
 # Logs
 *.log
+
+/mobile/android/key.properties

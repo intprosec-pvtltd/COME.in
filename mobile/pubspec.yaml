@@ -1,7 +1,7 @@
 name: pg_resident
 publish_to: none
 description: COME.in owner, resident and maintenance mobile application
-version: 0.3.0+3
+version: 1.0.0+4
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
