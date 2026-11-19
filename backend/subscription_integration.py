@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
-from main import app, db, current, SessionLocal, User
+from main import app, db, current, SessionLocal, User, engine
 from platform_api import _requires_admin, _owner_counts, _tenant
 from staysync_subscriptions import BillingStore, create_router
 from subscription_phase3 import prepare_schema, legacy_invoice_exists, activate_verified_payment
@@ -64,6 +64,7 @@ def mount_subscription_router():
     db_path = os.getenv('STAYSYNC_SUBSCRIPTION_DB', './staysync_subscriptions.db')
     prepare_schema()
     store = BillingStore(db_path=db_path, media_dir=str(base))
+    store.attach_durable_qr(engine)  # persists across deployments if DATABASE_URL is persistent
     app.include_router(create_router(store, subscription_principal, subscription_counts,
                                      legacy_guard=legacy_invoice_exists,
                                      activate_payment=activate_verified_payment,

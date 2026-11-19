@@ -13,6 +13,7 @@ export default function SubscriptionPayments({apiBase='http://127.0.0.1:8000',to
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [busy,setBusy]=useState(false);
+  const [savedQrImage,setSavedQrImage]=useState('');
   const root=apiBase.replace(/\/$/,'')+'/api/owner-subscriptions';
   const auth=()=>({'Authorization':`Bearer ${token}`});
   async function request(path,opts={}){
@@ -28,6 +29,18 @@ export default function SubscriptionPayments({apiBase='http://127.0.0.1:8000',to
     }catch(e){setError(e.message);toast.error(e.message)}
   }
   useEffect(()=>{if(token)refresh()},[token,apiBase,refreshKey]);
+  useEffect(()=>{
+    if(settings?.qr){setBeneficiary(settings.qr.beneficiary||'');setUpi(settings.qr.upi_id||'')}
+  },[settings?.qr?.updated_at]);
+  useEffect(()=>{
+    if(!token || !settings?.qr?.enabled){setSavedQrImage('');return}
+    let disposed=false, url='';
+    fetch(root+'/payment-qr',{headers:auth()}).then(r=>{if(!r.ok)throw Error('QR preview unavailable');return r.blob()}).then(blob=>{
+      if(disposed)return;
+      url=URL.createObjectURL(blob);setSavedQrImage(url);
+    }).catch(()=>{if(!disposed)setSavedQrImage('')});
+    return ()=>{disposed=true;if(url)URL.revokeObjectURL(url)};
+  },[root,token,settings?.qr?.updated_at,settings?.qr?.enabled]);
   async function act(fn){setBusy(true);setError('');setNotice('');try{const result=await fn();const msg=result?.activation?.status==='pending'?'Payment approved. Activation pending; use Retry activation after resolving the error.':'Saved successfully';setNotice(msg);toast.success(msg);await refresh()}catch(e){setError(e.message);toast.error(e.message)}finally{setBusy(false)}}
   const currency=v=>'₹'+(Number(v||0)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pendingPayments=payments.filter(p=>p.status==='pending');
@@ -49,8 +62,10 @@ export default function SubscriptionPayments({apiBase='http://127.0.0.1:8000',to
         <label>Beneficiary name<input required maxLength={120} value={beneficiary} onChange={e=>setBeneficiary(e.target.value)}/></label>
         <label>UPI ID<input required maxLength={120} value={upi} onChange={e=>setUpi(e.target.value)}/></label>
         <label>PNG / JPEG (up to 2 MB)<input type="file" accept="image/png,image/jpeg" onChange={e=>setQr(e.target.files?.[0]||null)}/></label>
-        <p>QR: {settings?.qr?(settings.qr.enabled?'Enabled':'Disabled'):'Not uploaded'}</p>
-        <button disabled={busy}>{busy?'Uploading…':settings?.qr?'Change platform QR':'Upload platform QR'}</button>
+        <p className="ss-qr-status">{settings?.qr ? 'Saved platform QR — available across administrator sessions' : 'No platform QR saved yet. Upload once to publish it.'}</p>
+        {savedQrImage&&<img src={savedQrImage} alt="Currently saved platform UPI QR code" className="ss-qr-preview"/>}
+        {settings?.qr&&<p className="hint">Beneficiary: {settings.qr.beneficiary} · UPI: {settings.qr.upi_id}</p>}
+        <button disabled={busy||!qr}>{busy?'Saving…':settings?.qr?'Replace saved QR':'Upload and save QR'}</button>
         {settings?.qr&&<button className="ss-alt" type="button" disabled={busy} onClick={()=>act(()=>request('/admin/qr/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!settings.qr.enabled})}))}>{settings.qr.enabled?'Disable QR':'Enable QR'}</button>}
       </form>
     </div>

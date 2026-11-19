@@ -108,7 +108,12 @@ class BankUpdate(BaseModel):
 passwords=PasswordHash.recommended()
 SECRET=os.getenv('SECRET_KEY','development-only-not-for-production')
 app=FastAPI(title='COME.in PG Platform API',version='0.1.0')
-app.add_middleware(CORSMiddleware,allow_origins=os.getenv('CORS_ORIGINS','http://localhost:5173').split(','),allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
+# Explicit allowlist: the deployed admin dashboard must be permitted even when
+# CORS_ORIGINS was configured for localhost only. Never use '*' with credentials.
+_cors_origins = {'https://comein-admin.onrender.com', 'http://localhost:5173', 'http://127.0.0.1:5173'}
+_cors_origins.update(origin.strip().rstrip('/') for origin in os.getenv('CORS_ORIGINS', '').split(',') if origin.strip())
+app.add_middleware(CORSMiddleware, allow_origins=sorted(_cors_origins),
+                   allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 def db():
  with SessionLocal() as session: yield session
 def _platform_user_enabled(session, user_id):

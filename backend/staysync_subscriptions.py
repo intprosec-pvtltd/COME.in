@@ -19,8 +19,9 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import MetaData, Table, Column, Integer, String, LargeBinary, Text, select, update
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_QR_BYTES = 2 * 1024 * 1024
@@ -57,6 +58,8 @@ class BillingStore:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.qr_table = None
+        self.qr_engine = None
         with self.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS ss_pricing (
@@ -134,12 +137,65 @@ class BillingStore:
         # Invoice rows issued in earlier months retain their stored amounts.
         return {'bed_rate': rupees(0), 'resident_rate': rupees(FIXED_RESIDENT_RATE_CENTS)}
 
+    def attach_durable_qr(self, primary_engine):
+        """Persist the platform QR in the authoritative app DB, not ephemeral media."""
+        table = Table('staysync_platform_qr', MetaData(),
+            Column('singleton', Integer, primary_key=True),
+            Column('image_bytes', LargeBinary, nullable=False),
+            Column('media_type', String(32), nullable=False),
+            Column('beneficiary', String(120), nullable=False),
+            Column('upi_id', String(120), nullable=False),
+            Column('enabled', Integer, nullable=False),
+            Column('updated_at', String(48), nullable=False),
+            Column('updated_by', String(120), nullable=False))
+        table.create(bind=primary_engine, checkfirst=True)
+        self.qr_engine, self.qr_table = primary_engine, table
+        # One-time migration of a still-available legacy QR, never overwrites
+        # a previously persisted QR. If lost on a redeploy it must be reuploaded.
+        with primary_engine.begin() as c:
+            if c.execute(select(table.c.singleton).where(table.c.singleton == 1)).first():
+                return
+        with self.connect() as db:
+            legacy = db.execute('SELECT * FROM ss_qr WHERE singleton=1').fetchone()
+        if legacy:
+            path = self.media_dir / legacy['filename']
+            if path.is_file():
+                data = path.read_bytes()
+                if len(data) <= MAX_QR_BYTES and detected_image(data) == legacy['media_type']:
+                    with primary_engine.begin() as c:
+                        if not c.execute(select(table.c.singleton).where(table.c.singleton == 1)).first():
+                            c.execute(table.insert().values(singleton=1, image_bytes=data,
+                                media_type=legacy['media_type'], beneficiary=legacy['beneficiary'],
+                                upi_id=legacy['upi_id'], enabled=legacy['enabled'],
+                                updated_at=legacy['updated_at'], updated_by=legacy['updated_by']))
+
+    def qr_content(self):
+        if self.qr_table is not None:
+            table = self.qr_table
+            with self.qr_engine.connect() as c:
+                row = c.execute(select(table).where(table.c.singleton == 1)).mappings().first()
+            if not row or not row['enabled']:
+                raise LookupError('Payment QR has not been enabled')
+            return bytes(row['image_bytes']), row['media_type']
+        path, mime = self.qr_path()
+        return path.read_bytes(), mime
+
     def set_qr(self, actor, data, beneficiary, upi_id):
         if not data or len(data) > MAX_QR_BYTES:
             raise ValueError('QR image must be 1 byte to 2 MB')
         mime = detected_image(data)
         if not mime:
             raise ValueError('QR must be a PNG or JPEG image')
+        if self.qr_table is not None:
+            table = self.qr_table
+            values = dict(image_bytes=data, media_type=mime, beneficiary=beneficiary,
+                          upi_id=upi_id, enabled=1, updated_at=utcnow(), updated_by=actor)
+            with self.lock, self.qr_engine.begin() as c:
+                if c.execute(select(table.c.singleton).where(table.c.singleton == 1)).first():
+                    c.execute(update(table).where(table.c.singleton == 1).values(**values))
+                else:
+                    c.execute(table.insert().values(singleton=1, **values))
+            return self.qr()
         extension = '.png' if mime == 'image/png' else '.jpg'
         name = uuid.uuid4().hex + extension
         (self.media_dir / name).write_bytes(data)
@@ -154,6 +210,13 @@ class BillingStore:
         return self.qr()
 
     def qr(self):
+        if self.qr_table is not None:
+            table = self.qr_table
+            with self.qr_engine.connect() as c:
+                row = c.execute(select(table).where(table.c.singleton == 1)).mappings().first()
+            if not row:
+                return None
+            return {k: row[k] for k in ('singleton','media_type','beneficiary','upi_id','enabled','updated_at','updated_by')}
         with self.connect() as db:
             row = db.execute('SELECT * FROM ss_qr WHERE singleton=1').fetchone()
         if row is None:
@@ -170,6 +233,14 @@ class BillingStore:
         return self.media_dir / row['filename'], row['media_type']
 
     def set_qr_enabled(self, actor, enabled: bool):
+        if self.qr_table is not None:
+            table = self.qr_table
+            with self.lock, self.qr_engine.begin() as c:
+                result = c.execute(update(table).where(table.c.singleton == 1).values(
+                    enabled=int(enabled), updated_at=utcnow(), updated_by=actor))
+                if result.rowcount == 0:
+                    raise LookupError('No QR uploaded')
+            return self.qr()
         with self.lock, self.connect() as db:
             changed = db.execute('UPDATE ss_qr SET enabled=?,updated_at=?,updated_by=? WHERE singleton=1',
                                  (int(enabled), utcnow(), actor)).rowcount
@@ -351,9 +422,9 @@ def create_router(store:BillingStore, principal_dependency:Callable, count_provi
 
     @router.get('/payment-qr')
     def qr_image(p=Depends(owner_or_admin)):
-        try:path,mime=store.qr_path()
+        try:data,mime=store.qr_content()
         except LookupError as exc:raise HTTPException(404,str(exc)) from exc
-        return FileResponse(path,media_type=mime,headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+        return Response(content=data,media_type=mime,headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
 
     @router.get('/me')
     def my_subscription(p=Depends(owner)):

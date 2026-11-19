@@ -438,3 +438,36 @@ body,.app-shell { background:linear-gradient(135deg,#fdf9ff 0%,#fff8fd 60%,#fff5
 .admin-attention-menu button:hover { background: #f2e7f7; }
 
 .page-header { position: sticky; top: 0; z-index: 12; background: #faf7fc; padding-top: 12px; }
+
+/* 2026-11-19: admin verification property details and legible account actions. */
+.property-detail-link{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;border-radius:10px;background:#f6edf9;color:#542367;font-size:13px;font-weight:750;min-height:36px;padding:7px 11px;text-align:left;max-width:100%}
+.property-detail-link:hover,.property-detail-link:focus-visible{border-color:#a979bf;background:#f0dff7;text-decoration:underline;outline-offset:2px}
+.ss-account-actions{min-width:184px;white-space:normal}
+.ss-action-buttons{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-start}
+.ss-action-buttons .outline{min-height:36px;padding:8px 12px;white-space:nowrap;font-size:12px}
+.ss-actions-heading{min-width:184px}
+.account-group .table-scroll{overflow-x:auto}
+.account-group table{min-width:780px}
+.ss-modal-backdrop{position:fixed;inset:0;background:#180d20b9;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.ss-property-dialog{background:#fff;color:#30163d;width:min(630px,100%);max-height:min(85vh,880px);overflow-y:auto;border-radius:20px;padding:26px;box-shadow:0 25px 80px #17092163}
+.ss-property-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:20px}
+.ss-property-dialog-heading h3{display:flex;align-items:center;gap:9px;margin:7px 0 0;font-size:21px;overflow-wrap:anywhere}
+.ss-icon-close{min-width:40px;min-height:40px;padding:8px}
+.ss-property-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ss-property-facts>div{background:#faf7fc;border:1px solid #f0e5f3;padding:14px;border-radius:12px;min-width:0}
+.ss-property-facts small{display:block;font-size:11px;color:#876e91;margin-bottom:5px}
+.ss-property-facts strong{display:block;font-size:14px;color:#34163d;overflow-wrap:anywhere}
+.ss-property-dialog h4{font-size:14px;margin:21px 0 10px}
+.ss-property-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.ss-property-chips span{background:#f2e8f8;padding:7px 10px;border-radius:9px;font-size:12px}
+@media(max-width:600px){.ss-property-facts{grid-template-columns:1fr}.ss-property-dialog{padding:18px}}
+
+/* Stay Sync Manage: tighter dashboard gutters without shrinking tables. */
+@media(min-width:851px){
+  .app-shell .sidebar{width:232px;flex-basis:232px;min-width:232px}
+  .app-shell .content{padding:20px clamp(14px,1.7vw,26px) 12px;max-width:none;min-width:0}
+  .app-shell .panel{padding:20px;margin-bottom:16px}
+  .app-shell .page-header{margin-bottom:16px;padding-bottom:16px}
+}
+.ss-qr-preview{display:block;width:min(240px,100%);max-height:260px;object-fit:contain;border:1px solid #e7ddeb;border-radius:12px;padding:12px;background:white;margin:12px 0}
+.ss-qr-status{font-weight:700;color:#4b2860}
