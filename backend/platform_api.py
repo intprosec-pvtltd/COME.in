@@ -89,6 +89,11 @@ class SubscriptionInvoice(Base):
     billable_residents: Mapped[int] = mapped_column(Integer)
     unit_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # Nullable snapshots make legacy invoices distinguishable without rewriting them.
+    billable_owners: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gst_rate_bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gst_amount: Mapped[Decimal | None] = mapped_column(Numeric(12,2), nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12,2), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default='draft')
     payment_reference: Mapped[str] = mapped_column(String(120), default='')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -266,12 +271,24 @@ def _owner_counts(s, t):
     return {'properties':result, 'pg_count':len(properties), 'total_rooms':len(rooms), 'total_beds':total_beds, 'total_residents':len(residents), 'billable_residents':len(residents)-len(exclusions), 'unassigned_rooms':unassigned_rooms, 'unassigned_residents':unassigned_residents, 'occupancy_percent':round(len(residents)/total_beds*100,1) if total_beds else None, 'rooms': [{'id':r.id,'name':r.name,'beds':r.beds,'property_id':room_assignments.get(r.id)} for r in rooms], 'residents':[{'id':r.id,'name':r.name,'email':r.email,'room':r.room,'property_id':resident_assignments.get(r.id),'monthly_rent':str(v3_meta(s,t.id,'resident_meta',r.id).get('monthly_rent','0')),'billable':r.id not in exclusions} for r in residents]}
 
 
+def _billable_owner_count(s, tenant_id):
+    owners=s.scalars(select(User).where(User.tenant_id==tenant_id,User.role=='owner')).all()
+    return len({x.id for x in owners if not (s.get(PlatformUserAccess,x.id)
+               and s.get(PlatformUserAccess,x.id).is_active == 0)}) or 1
+
+
+def _invoice_total(i):
+    return i.total_amount if i.total_amount is not None else i.subtotal
+
+
 def _owner_out(s, t, detail=False):
     owners=s.scalars(select(User).where(User.tenant_id==t.id, User.role=='owner')).all()
     sub=_subscription(s,t.id)
     c=_owner_counts(s,t)
-    billed=Decimal(c['billable_residents'])*STAYSYNC_FIXED_RESIDENT_RATE
-    out={'id':t.id,'business_name':t.name,'owners':[{'id':u.id,'name':u.name,'email':u.email} for u in owners], 'pg_count':c['pg_count'], 'total_beds':c['total_beds'], 'total_residents':c['total_residents'], 'billable_residents':c['billable_residents'], 'occupancy_percent':c['occupancy_percent'], 'unassigned_rooms':c['unassigned_rooms'],'unassigned_residents':c['unassigned_residents'], 'subscription':{'status':sub.status,'price_per_resident':_minor(STAYSYNC_FIXED_RESIDENT_RATE),'trial_until':sub.trial_until,'billing_notes':sub.billing_notes,'estimated_monthly':_minor(billed),'currency':'INR'}}
+    from staysync_subscriptions import calculate_invoice
+    detail_amount=calculate_invoice(c['billable_residents'],_billable_owner_count(s,t.id))
+    billed=Decimal(detail_amount['amount_cents']) / 100
+    out={'id':t.id,'business_name':t.name,'owners':[{'id':u.id,'name':u.name,'email':u.email} for u in owners], 'pg_count':c['pg_count'], 'total_beds':c['total_beds'], 'total_residents':c['total_residents'], 'billable_residents':c['billable_residents'], 'billable_owners':_billable_owner_count(s,t.id), 'occupancy_percent':c['occupancy_percent'], 'unassigned_rooms':c['unassigned_rooms'],'unassigned_residents':c['unassigned_residents'], 'subscription':{'status':sub.status,'price_per_resident':_minor(STAYSYNC_FIXED_RESIDENT_RATE),'trial_until':sub.trial_until,'billing_notes':sub.billing_notes,'estimated_monthly':_minor(billed),'currency':'INR'}}
     if detail:
         out.update({'properties':c['properties'],'rooms':c['rooms'],'residents':c['residents']})
     return out
@@ -407,7 +424,7 @@ def platform_overview(admin:AdminUser=Depends(_requires_admin),s:Session=Depends
     tenants=s.scalars(select(Tenant).order_by(Tenant.id)).all()
     items=[_owner_out(s,t) for t in tenants]
     invoices=s.scalars(select(SubscriptionInvoice)).all()
-    return {'owners':len(tenants),'pgs':sum(t['pg_count'] for t in items),'beds':sum(t['total_beds'] for t in items),'registered_residents':sum(t['total_residents'] for t in items),'billable_residents':sum(t['billable_residents'] for t in items),'estimated_monthly_revenue':_minor(sum((Decimal(t['subscription']['estimated_monthly']) for t in items),Decimal('0'))),'invoiced_total':_minor(sum((i.subtotal for i in invoices if i.status not in ('void',)),Decimal('0'))),'confirmed_collected':_minor(sum((i.subtotal for i in invoices if i.status=='paid'),Decimal('0'))),'outstanding':_minor(sum((i.subtotal for i in invoices if i.status=='issued'),Decimal('0'))),'owner_rows':items}
+    return {'owners':len(tenants),'pgs':sum(t['pg_count'] for t in items),'beds':sum(t['total_beds'] for t in items),'registered_residents':sum(t['total_residents'] for t in items),'billable_residents':sum(t['billable_residents'] for t in items),'estimated_monthly_revenue':_minor(sum((Decimal(t['subscription']['estimated_monthly']) for t in items),Decimal('0'))),'invoiced_total':_minor(sum((_invoice_total(i) for i in invoices if i.status not in ('void',)),Decimal('0'))),'confirmed_collected':_minor(sum((_invoice_total(i) for i in invoices if i.status=='paid'),Decimal('0'))),'outstanding':_minor(sum((_invoice_total(i) for i in invoices if i.status=='issued'),Decimal('0'))),'owner_rows':items}
 
 
 @router.get('/owners')
@@ -513,7 +530,12 @@ def update_subscription(tenant_id:int,data:SubscriptionIn,admin:AdminUser=Depend
     if data.trial_until and not re.fullmatch(r'\d{4}-\d{2}-\d{2}',data.trial_until):raise HTTPException(422,'Trial date must be YYYY-MM-DD')
     row=_subscription(s,tenant_id)
     if data.price_per_resident != STAYSYNC_FIXED_RESIDENT_RATE:
-        raise HTTPException(422,'Only the INR 39 per billable resident plan is available')
+        raise HTTPException(422,'Only the INR 39 per billable person plan is available')
+    if data.status == 'active' and os.getenv('TRIAL_ENFORCEMENT_ENABLED','false').lower() == 'true':
+        from subscription_phase3 import active_paid_until
+        until = active_paid_until(s, tenant_id)
+        if not until or until < datetime.now(timezone.utc).date().isoformat():
+            raise HTTPException(409, 'Verified subscription payment required before activating access')
     row.price_per_resident=STAYSYNC_FIXED_RESIDENT_RATE;row.status=data.status;row.trial_until=data.trial_until;row.billing_notes=data.billing_notes
     _audit(s,admin,'update_subscription',f'tenant:{tenant_id}')
     s.commit();return _owner_out(s,_tenant(s,tenant_id))['subscription']
@@ -541,15 +563,22 @@ def create_invoice(tenant_id:int,data:InvoicePeriodIn,admin:AdminUser=Depends(_r
     sub=_subscription(s,tenant_id)
     if sub.status in ('trial','paused','cancelled'):
         raise HTTPException(409,'Activate subscription to generate a billable invoice')
+    from staysync_subscriptions import calculate_invoice
     cnt=_owner_counts(s,tenant)['billable_residents']
-    subtotal=(STAYSYNC_FIXED_RESIDENT_RATE*Decimal(cnt)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)
-    i=SubscriptionInvoice(tenant_id=tenant_id,period=data.period,billable_residents=cnt,unit_rate=STAYSYNC_FIXED_RESIDENT_RATE,subtotal=subtotal,status='draft')
+    owners=_billable_owner_count(s,tenant_id)
+    amounts=calculate_invoice(cnt,owners)
+    subtotal=Decimal(amounts['subtotal_cents']) / 100
+    gst=Decimal(amounts['gst_cents']) / 100
+    total=Decimal(amounts['amount_cents']) / 100
+    i=SubscriptionInvoice(tenant_id=tenant_id,period=data.period,billable_residents=cnt,
+      billable_owners=owners,unit_rate=STAYSYNC_FIXED_RESIDENT_RATE,subtotal=subtotal,
+      gst_rate_bps=amounts['gst_basis_points'],gst_amount=gst,total_amount=total,status='draft')
     s.add(i);s.flush();_audit(s,admin,'create_invoice',f'invoice:{i.id}');s.commit()
     return _invoice_out(i)
 
 
 def _invoice_out(i):
-    return {'id':i.id,'tenant_id':i.tenant_id,'period':i.period,'billable_residents':i.billable_residents,'unit_rate':_minor(i.unit_rate),'subtotal':_minor(i.subtotal),'status':i.status,'payment_reference':i.payment_reference,'created_at':i.created_at.isoformat() if i.created_at else None,'currency':'INR','gst_included':False}
+    return {'id':i.id,'tenant_id':i.tenant_id,'period':i.period,'billable_residents':i.billable_residents,'billable_owners':i.billable_owners,'unit_rate':_minor(i.unit_rate),'subtotal':_minor(i.subtotal),'gst_amount':_minor(i.gst_amount or 0),'gst_rate_percent':_minor(Decimal(i.gst_rate_bps or 0)/100),'total':_minor(_invoice_total(i)),'status':i.status,'payment_reference':i.payment_reference,'created_at':i.created_at.isoformat() if i.created_at else None,'currency':'INR','gst_included':i.total_amount is not None}
 
 
 @router.get('/invoices')
@@ -584,6 +613,19 @@ def audit(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
 def install_schema():
     # Creates only new tables. Existing tenant/room/resident schemas are untouched.
     Base.metadata.create_all(engine, tables=[AdminUser.__table__,PGProperty.__table__,RoomAssignment.__table__,ResidentAssignment.__table__,Subscription.__table__,SubscriptionInvoice.__table__,ResidentBillingOverride.__table__,AdminAudit.__table__,PlatformUserAccess.__table__])
+    # Online additive migration. Do not recalculate or backfill historical bills.
+    from sqlalchemy import inspect as _inspect, text as _text
+    existing={x['name'] for x in _inspect(engine).get_columns('platform_subscription_invoices')}
+    columns={
+        'billable_owners':'INTEGER',
+        'gst_rate_bps':'INTEGER',
+        'gst_amount':'NUMERIC(12,2)',
+        'total_amount':'NUMERIC(12,2)',
+    }
+    with engine.begin() as conn:
+        for name, sql_type in columns.items():
+            if name not in existing:
+                conn.execute(_text(f'ALTER TABLE platform_subscription_invoices ADD COLUMN {name} {sql_type}'))
 
 
 @router.get('/resident-verifications')

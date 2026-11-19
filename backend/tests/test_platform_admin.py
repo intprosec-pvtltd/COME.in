@@ -56,17 +56,17 @@ def test_platform_admin_isolated_and_billing(tmp_path, monkeypatch):
     assert properties_by_id[p1.json()['id']]['residents']==1
     assert properties_by_id[p2.json()['id']]['beds']==3
     assert properties_by_id[p2.json()['id']]['residents']==0
-    assert detail['subscription']['estimated_monthly']=='39.00'
+    assert detail['subscription']['estimated_monthly']=='92.04'
     assert c.post(f'/api/platform/owners/{tid}/invoices',headers=auth,json={'period':'2026-11'}).status_code==409  # trial
     assert c.put(f'/api/platform/owners/{tid}/subscription',headers=auth,json={'price_per_resident':'39.00','status':'active','trial_until':'','billing_notes':'launch offer'}).status_code==200
     i=c.post(f'/api/platform/owners/{tid}/invoices',headers=auth,json={'period':'2026-11'})
     assert i.status_code==201,i.text
-    assert i.json()['subtotal']=='39.00' and i.json()['billable_residents']==1
+    assert i.json()['subtotal']=='78.00' and i.json()['gst_amount']=='14.04' and i.json()['total']=='92.04' and i.json()['billable_residents']==1
     assert c.post(f'/api/platform/owners/{tid}/invoices',headers=auth,json={'period':'2026-11'}).status_code==409
     assert c.post(f'/api/platform/invoices/{i.json()["id"]}/issue',headers=auth).status_code==200
     paid=c.post(f'/api/platform/invoices/{i.json()["id"]}/confirm-manual-payment',headers=auth,json={'payment_reference':'VERIFIED-UTR-0001'})
     assert paid.status_code==200 and paid.json()['status']=='paid'
-    assert c.get('/api/platform/overview',headers=auth).json()['confirmed_collected']=='39.00'
+    assert c.get('/api/platform/overview',headers=auth).json()['confirmed_collected']=='92.04'
     # Newly created temporary credentials must have a future expiry.
     from v3_api import meta as v3_meta
     from datetime import datetime, timezone

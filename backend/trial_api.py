@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import ForeignKey, Integer, String, DateTime, select
+from sqlalchemy import ForeignKey, Integer, String, DateTime, UniqueConstraint, select
 from sqlalchemy.orm import Mapped, mapped_column, Session
 import jwt
 
@@ -31,6 +31,16 @@ class OrganizationTrial(Base):
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=TRIAL_DAYS)
     extension_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+class TrialReminder(Base):
+    """Unique reminders, preventing duplicates across workers or restarts."""
+    __tablename__ = 'staysync_trial_reminders'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey('tenants.id'), nullable=False)
+    milestone: Mapped[int] = mapped_column(Integer, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (UniqueConstraint('tenant_id','milestone',name='uq_staysync_trial_reminder'),)
+
 
 class ReasonIn(BaseModel):
     reason: str = Field(min_length=8, max_length=300)
@@ -99,6 +109,89 @@ def record_for(session, tenant_id):
 def my_trial(user:User=Depends(current), s:Session=Depends(db)):
     return state(s,user.tenant_id)
 
+@router.post('/api/trial/start')
+def start_trial(user: User = Depends(current), s: Session = Depends(db)):
+    """One-time self-serve trial, tied to organization rather than device."""
+    if user.role != 'owner':
+        raise HTTPException(403, 'Only the PG owner may start a trial')
+    tenant_id = user.tenant_id
+    record = record_for(s, tenant_id)
+    if record.started_at is not None or record.status != 'pending':
+        raise HTTPException(409, 'Your organization already used its free trial')
+    sub = s.get(Subscription, tenant_id)
+    if sub and sub.status == 'active':
+        raise HTTPException(409, 'Your organization already has a paid subscription')
+    record.started_at = now()
+    record.expires_at = record.started_at + timedelta(days=TRIAL_DAYS)
+    record.status = 'trial_active'
+    sub = _subscription(s, tenant_id)
+    sub.status = 'trial'
+    sub.trial_until = record.expires_at.date().isoformat()
+    s.commit()
+    return state(s, tenant_id)
+
+
+def run_due_reminders():
+    """Create in-app/FCM owner alerts; scheduler should call periodically.
+
+    A DB unique key makes each milestone idempotent. On free instances this
+    worker runs only while the service is awake; do not promise exact timing.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from v3_api import Alert
+    from push_notifications import PushJob
+    sent = 0
+    with SessionLocal() as s:
+        active = s.scalars(select(OrganizationTrial).where(OrganizationTrial.status == 'trial_active')).all()
+        for trial in active:
+            if not trial.expires_at: continue
+            seconds = (aware(trial.expires_at) - now()).total_seconds()
+            days = max(0, int((seconds + 86399) // 86400))
+            milestone = next((m for m in (0,1,3,7) if days <= m), None)
+            if milestone is None: continue
+            # One message only per run: the nearest relevant milestone.
+            if s.scalar(select(TrialReminder.id).where(TrialReminder.tenant_id==trial.tenant_id,
+                         TrialReminder.milestone==milestone)):
+                continue
+            owners = s.scalars(select(User).where(User.tenant_id==trial.tenant_id,User.role=='owner')).all()
+            try:
+                with s.begin_nested():
+                    s.add(TrialReminder(tenant_id=trial.tenant_id,milestone=milestone))
+                    s.flush()
+                    for user in owners:
+                        text = ('Your free trial has ended. Pay to restore access.' if days == 0
+                                else f'Your Stay Sync trial ends in {days} day(s). View your subscription.')
+                        item = Alert(tenant_id=trial.tenant_id,user_id=user.id,
+                          audience='owners',title='Stay Sync subscription reminder',
+                          body=text,destination='ownerSubscription')
+                        s.add(item);s.flush()
+                        if os.getenv('PUSH_ENABLED') == '1':
+                            s.add(PushJob(alert_id=item.id))
+                    sent += 1
+            except IntegrityError:
+                continue
+        s.commit()
+    return sent
+
+
+@router.post('/api/platform/trials/run-reminders')
+def trigger_reminders(admin: AdminUser = Depends(_requires_admin)):
+    return {'reminders_created':run_due_reminders()}
+
+
+def start_reminder_worker():
+    """Best-effort scheduler; for guaranteed daily delivery use an external cron."""
+    if os.getenv('TRIAL_REMINDERS_ENABLED','false').lower() != 'true':
+        return
+    import threading, time, logging
+    def worker():
+        while True:
+            try:run_due_reminders()
+            except Exception:logging.getLogger('staysync.trials').exception('Reminder generation failed')
+            time.sleep(4*3600)
+    threading.Thread(target=worker,daemon=True,name='staysync-trial-reminders').start()
+
+
 @router.get('/api/platform/trials')
 def all_trials(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
     tenants=s.scalars(select(Tenant).order_by(Tenant.id.desc())).all()
@@ -156,6 +249,10 @@ def resume(tenant_id:int,data:ReasonIn,admin:AdminUser=Depends(_requires_admin),
 def convert(tenant_id:int,data:PaidIn,admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
     _tenant(s,tenant_id)
     if not data.payment_verified:raise HTTPException(422,'Confirm independently verified payment before paid activation')
+    from subscription_phase3 import active_paid_until
+    paid_until=active_paid_until(s,tenant_id)
+    if not paid_until or paid_until < now().date().isoformat():
+        raise HTTPException(409,'A verified active payment is required before paid activation')
     item=record_for(s,tenant_id)
     if item.status=='suspended':raise HTTPException(409,'Suspended organization must be reviewed first')
     sub=_subscription(s,tenant_id)
@@ -200,31 +297,38 @@ def resume_paid_subscription(tenant_id:int,data:ReasonIn,admin:AdminUser=Depends
     s.commit()
     return state(s,tenant_id)
 
-# Restrict only selected new management writes, never resident rent/receipts,
-# essential communication, account deletion, sign-in or history export.
-# This feature is opt-in to protect existing customers during migration.
-MANAGED_PREFIXES=('/api/v3/entities/properties','/api/v3/entities/rooms',
-                  '/api/v3/entities/staff','/api/v3/entities/residents',
-                  '/api/v3/entities/property','/api/v3/entities/room',
-                  '/api/v3/entities/resident','/api/v3/entities/booking')
+# Server gate: all owner/manager business APIs, not only selected writes.
+# Keep bootstrapping, billing, trial selection, authentication, receipts and
+# password recovery reachable while payment is required. Disabled by default
+# until staging confirms payment activation and old-account migration.
+EXEMPT_PREFIXES = (
+    '/api/login','/api/health','/api/trial/','/api/platform/',
+    '/api/owner-subscriptions/','/api/v3/state','/api/v3/password',
+    '/api/v3/logout','/api/v3/profile','/api/v3/receipt',
+    '/api/v3/receipts','/api/v3/export','/api/v3/push-tokens',
+    '/api/reset','/api/forgot','/api/recovery',
+)
 
 async def enforcement_middleware(request:Request,call_next):
-    if os.getenv('TRIAL_ENFORCEMENT_ENABLED','false').lower() != 'true' or request.method not in ('POST','PUT','PATCH','DELETE'):
+    if os.getenv('TRIAL_ENFORCEMENT_ENABLED','false').lower() != 'true':
         return await call_next(request)
     path=request.url.path
-    if not any(path == prefix or path.startswith(prefix+'/') for prefix in MANAGED_PREFIXES):
+    if not path.startswith('/api/') or any(path == p.rstrip('/') or path.startswith(p) for p in EXEMPT_PREFIXES):
         return await call_next(request)
-    authorization=request.headers.get('authorization','')
-    if not authorization.startswith('Bearer '):return await call_next(request)
+    auth=request.headers.get('authorization','')
+    if not auth.startswith('Bearer '): return await call_next(request)
     try:
-        payload=jwt.decode(authorization[7:],SECRET,algorithms=['HS256'])
+        payload=jwt.decode(auth[7:],SECRET,algorithms=['HS256'])
         with SessionLocal() as s:
             user=s.get(User,int(payload['sub']))
             if user and user.tenant_id==payload.get('tenant') and user.role in ('owner','manager'):
                 status=state(s,user.tenant_id)['status']
                 if status not in ('trial_active','paid'):
                     from fastapi.responses import JSONResponse
-                    return JSONResponse(status_code=403,content={'detail':f'Organization access: {status}. Contact IntProSec platform administrator.'})
+                    return JSONResponse(status_code=402,content={
+                        'detail':'Your free trial or subscription has ended. Complete payment to continue.',
+                        'code':'subscription_payment_required','subscription_status':status,
+                        'payment_route':'/api/owner-subscriptions/me'})
     except (jwt.PyJWTError,ValueError,KeyError,TypeError):
-        pass  # Existing route authentication still handles bad tokens.
+        pass  # Normal authentication errors remain the responsibility of routes.
     return await call_next(request)

@@ -232,7 +232,7 @@ def test_single_plan_rate_and_preserved_historical_invoice(tmp_path):
     from staysync_subscriptions import BillingStore
     store=BillingStore(str(tmp_path/'subscriptions.db'),str(tmp_path/'payment_files'))
     invoice=store.issue_invoice('owner-1','2026-11',beds=100,residents=2)
-    assert invoice['amount_cents']==7800
+    assert invoice['amount_cents']==13806
     assert invoice['bed_rate_cents']==0
     with pytest.raises(ValueError):
         store.set_pricing('admin',0,29)
@@ -241,4 +241,4 @@ def test_single_plan_rate_and_preserved_historical_invoice(tmp_path):
     with store.connect() as db:
         db.execute('UPDATE ss_invoices SET amount_cents=5800 WHERE id=?',(invoice['id'],))
     assert store.issue_invoice('owner-1','2026-11',beds=100,residents=2)['amount_cents']==5800
-    assert store.issue_invoice('owner-1','2026-12',beds=100,residents=3)['amount_cents']==11700
+    assert store.issue_invoice('owner-1','2026-12',beds=100,residents=3)['amount_cents']==18408

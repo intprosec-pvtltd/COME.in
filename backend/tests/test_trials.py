@@ -53,6 +53,6 @@ def test_trial_management_is_admin_only(tmp_path, monkeypatch):
         assert state(s,tid)['status']=='trial_expired'
     assert c.post(f'/api/platform/trials/{tid}/convert',headers=headers,json={'reason':'invoice paid','payment_verified':False}).status_code==422
     paid=c.post(f'/api/platform/trials/{tid}/convert',headers=headers,json={'reason':'verified external bank payment','payment_verified':True})
-    assert paid.status_code==200,paid.text
-    assert paid.json()['status']=='paid'
+    assert paid.status_code==409,paid.text  # No paid activation without a verified journal
+    assert paid.json()['detail'].startswith('A verified active payment')
     assert c.get('/api/platform/trials',headers=headers).status_code==200

@@ -97,7 +97,9 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
     final period='${current.year}-${current.month.toString().padLeft(2,'0')}';
     final thisMonth=inv.where((i)=>i['period']==period).toList();
     final legacyThisMonth=legacy!=null&&legacy['period']==period;
-    final monthly=residents*39;
+    final owners=(payload?['billable_owners'] as num?)?.toInt()??1;
+    final estimate=payload?['estimate'] as Map<String,dynamic>?;
+    final monthly=(((estimate?['amount_cents'] as num?)?.toInt()??0)/100).toStringAsFixed(2);
     return Scaffold(
       backgroundColor:const Color(0xfffaf6fc),
       appBar:AppBar(title:const Text('My subscription')),
@@ -118,11 +120,12 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
               const Text('ONE SIMPLE PLAN',style:TextStyle(color:Color(0xffe7d9ed),fontSize:12,fontWeight:FontWeight.bold)),
               const SizedBox(height:12),
               const Text('₹39',style:TextStyle(color:Colors.white,fontSize:44,fontWeight:FontWeight.w900)),
-              const Text('per billable resident / month',style:TextStyle(color:Colors.white,fontSize:15)),
+              const Text('per resident or owner / month, plus GST',style:TextStyle(color:Colors.white,fontSize:15)),
               const SizedBox(height:20),
-              Text('$residents billable residents  ×  ₹39',style:const TextStyle(color:Colors.white)),
+              Text('$residents residents + $owners owners = ${residents+owners} billable users',style:const TextStyle(color:Colors.white)),
+              Text('Subtotal: ${money(estimate?['subtotal_cents']??0)} · GST (18%): ${money(estimate?['gst_cents']??0)}',style:const TextStyle(color:Colors.white)),
               const SizedBox(height:6),
-              Text('Estimated monthly total: ₹$monthly',style:const TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w800)),
+              Text('Estimated monthly total incl. GST: ₹$monthly',style:const TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w800)),
               const SizedBox(height:6),
               const Text('Beds are not billed. Previously issued invoices retain their original amounts.',style:TextStyle(color:Color(0xffe7d9ed),fontSize:11)),
             ]),
@@ -159,7 +162,8 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
                 Chip(label:Text('${i['status']}'.toUpperCase())),
               ]),
               const SizedBox(height:5),
-              Text('Residents billed: ${i['residents']}'),
+              Text('Residents: ${i['residents']} · Owners: ${i['owners']??0}'),
+              if((i['owners']??0) != 0) Text('Subtotal: ${money(i['subtotal_cents'])} · GST: ${money(i['gst_cents'])}'),
               Text('Amount: ${money(i['amount_cents'])}',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
               if(i['status']!='paid') ...[
                 const Divider(height:25),

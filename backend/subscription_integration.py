@@ -45,6 +45,16 @@ def subscription_counts(owner_id: str):
         return int(counts['total_beds']), int(counts['billable_residents'])
 
 
+def owner_subscription_count(owner_id: str):
+    """Distinct active owner accounts in the organization, never one per PG."""
+    from platform_api import PlatformUserAccess
+    with SessionLocal() as s:
+        owners = s.scalars(select(User).where(User.tenant_id == int(owner_id), User.role == 'owner')).all()
+        active = [u for u in owners if (s.get(PlatformUserAccess,u.id) is None
+                  or bool(s.get(PlatformUserAccess,u.id).is_active))]
+        return len({u.id for u in active}) or 1
+
+
 def legacy_owner_invoice(owner_id: str):
     # Read-only: the historical platform invoice remains the authoritative bill.
     with SessionLocal() as session:
@@ -53,7 +63,7 @@ def legacy_owner_invoice(owner_id: str):
             SubscriptionInvoice.period.desc(), SubscriptionInvoice.id.desc()).limit(1))
         if record is None:
             return None
-        cents = int((Decimal(str(record.subtotal)) * 100).quantize(Decimal('1')))
+        cents = int((Decimal(str(record.total_amount if record.total_amount is not None else record.subtotal)) * 100).quantize(Decimal('1')))
         return {'id':record.id,'period':record.period,'status':record.status,
                 'amount_cents':cents,'residents':record.billable_residents,
                 'payment_reference':record.payment_reference or ''}
@@ -68,5 +78,6 @@ def mount_subscription_router():
     app.include_router(create_router(store, subscription_principal, subscription_counts,
                                      legacy_guard=legacy_invoice_exists,
                                      activate_payment=activate_verified_payment,
-                                     legacy_invoice_provider=legacy_owner_invoice))
+                                     legacy_invoice_provider=legacy_owner_invoice,
+                                     owner_count_provider=owner_subscription_count))
     return store

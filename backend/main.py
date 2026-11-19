@@ -295,8 +295,12 @@ app.include_router(trial_router)
 app.middleware('http')(enforcement_middleware)
 # Existing application uses additive create_all on startup; the trial record is
 # also additive and does not modify or delete existing subscription rows.
-from trial_api import OrganizationTrial
-Base.metadata.create_all(engine, tables=[OrganizationTrial.__table__])
+from trial_api import OrganizationTrial, TrialReminder, start_reminder_worker
+Base.metadata.create_all(engine, tables=[OrganizationTrial.__table__, TrialReminder.__table__])
+
+@app.on_event('startup')
+def start_staysync_trial_reminders():
+    start_reminder_worker()
 
 # STAYSYNC_PHASE2_SUBSCRIPTION_MOUNT
 from subscription_integration import mount_subscription_router

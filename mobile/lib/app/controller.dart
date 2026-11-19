@@ -137,11 +137,17 @@ class AppController extends ChangeNotifier {
     Map<String,
     dynamic>? body
   }) async {
-    final result=await api.request(path,
-    method:method,
-    body:body);
-    await refresh();
-    return result;
+    try {
+      final result=await api.request(path,method:method,body:body);
+      await refresh();
+      return result;
+    } on ApiException catch (e) {
+      if (e.statusCode == 402) {
+        // Refresh subscription state so the owner sees the payment gate.
+        try { await refresh(); } catch (_) {}
+      }
+      rethrow;
+    }
   } Future<void> save(String kind,
   Map<String,
   dynamic> value,

@@ -25,7 +25,21 @@ from sqlalchemy import MetaData, Table, Column, Integer, String, LargeBinary, Te
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_QR_BYTES = 2 * 1024 * 1024
-FIXED_RESIDENT_RATE_CENTS = 3900  # Single Stay Sync Manage plan: INR 39/month
+FIXED_RESIDENT_RATE_CENTS = 3900  # Fixed INR 39 per person: resident + owner.
+GST_BASIS_POINTS = 1800  # 18%; must match verified tax registration/place-of-supply policy.
+
+def calculate_invoice(residents: int, owners: int, gst_basis_points: int = GST_BASIS_POINTS) -> dict:
+    """Integer paise arithmetic; new invoices only, immutable at issuance."""
+    if (not isinstance(residents,int) or not isinstance(owners,int)
+        or residents < 0 or owners < 1 or owners > 1000
+        or not isinstance(gst_basis_points,int) or not 0 <= gst_basis_points <= 10000):
+        raise ValueError('Invalid billable counts or GST rate')
+    subtotal = (residents + owners) * FIXED_RESIDENT_RATE_CENTS
+    gst = (subtotal * gst_basis_points + 5000) // 10000
+    return {'residents':residents,'owners':owners,'billable_users':residents+owners,
+            'subtotal_cents':subtotal,'gst_basis_points':gst_basis_points,
+            'gst_cents':gst,'amount_cents':subtotal+gst}
+
 
 
 def utcnow() -> str:
@@ -100,6 +114,18 @@ class BillingStore:
                 db.execute("ALTER TABLE ss_submissions ADD COLUMN activation_status TEXT NOT NULL DEFAULT 'not_applicable'")
             if 'activation_error' not in columns:
                 db.execute("ALTER TABLE ss_submissions ADD COLUMN activation_error TEXT")
+            invoice_columns={r[1] for r in db.execute('PRAGMA table_info(ss_invoices)').fetchall()}
+            for name, ddl in (
+                ('owners','INTEGER NOT NULL DEFAULT 0'),
+                ('subtotal_cents','INTEGER NOT NULL DEFAULT 0'),
+                ('gst_basis_points','INTEGER NOT NULL DEFAULT 0'),
+                ('gst_cents','INTEGER NOT NULL DEFAULT 0'),
+                ('billable_users','INTEGER NOT NULL DEFAULT 0')):
+                if name not in invoice_columns:
+                    db.execute(f'ALTER TABLE ss_invoices ADD COLUMN {name} {ddl}')
+            # Existing invoice amounts never change. Their new columns remain 0,
+            # marking historical rows that predate owner+GST billing.
+
 
     def connect(self):
         db = sqlite3.connect(self.db_path, timeout=20)
@@ -135,7 +161,8 @@ class BillingStore:
             row = db.execute('SELECT * FROM ss_pricing WHERE singleton=1').fetchone()
         # Even existing accounts with older configured rates see the single plan.
         # Invoice rows issued in earlier months retain their stored amounts.
-        return {'bed_rate': rupees(0), 'resident_rate': rupees(FIXED_RESIDENT_RATE_CENTS)}
+        return {'bed_rate': rupees(0), 'resident_rate': rupees(FIXED_RESIDENT_RATE_CENTS),
+                'owner_rate': rupees(FIXED_RESIDENT_RATE_CENTS), 'gst_rate_percent': '18.00'}
 
     def attach_durable_qr(self, primary_engine):
         """Persist the platform QR in the authoritative app DB, not ephemeral media."""
@@ -249,7 +276,7 @@ class BillingStore:
             self.audit(db, actor, 'qr_enabled_changed', 'qr', {'enabled': enabled})
         return self.qr()
 
-    def issue_invoice(self, owner_id: str, period: str, beds: int, residents: int, legacy_guard=None):
+    def issue_invoice(self, owner_id: str, period: str, beds: int, residents: int, legacy_guard=None, owners: int=1):
         if not (isinstance(beds, int) and isinstance(residents, int)) or min(beds, residents) < 0:
             raise ValueError('Invalid bed/resident count')
         if len(period) != 7 or period[4] != '-' or not period[:4].isdigit() or not period[5:].isdigit() or not 1 <= int(period[5:]) <= 12:
@@ -262,12 +289,17 @@ class BillingStore:
                 raise ValueError('Existing legacy invoice for this owner/month; do not double bill')
             # New invoices always use the fixed single-plan rate, independent of
             # legacy ss_pricing values. Beds remain capacity snapshots only.
-            amount = residents * FIXED_RESIDENT_RATE_CENTS
+            breakdown = calculate_invoice(residents, owners)
+            amount = breakdown['amount_cents']
             invoice_id = uuid.uuid4().hex
-            db.execute('INSERT INTO ss_invoices VALUES(?,?,?,?,?,?,?,?,?,?)',
-                       (invoice_id,owner_id,period,beds,residents,0,
-                        FIXED_RESIDENT_RATE_CENTS,amount,'unpaid',utcnow()))
-            self.audit(db,'system','invoice_created',invoice_id,{'owner_id':owner_id,'period':period,'amount_cents':amount})
+            db.execute('''INSERT INTO ss_invoices(
+                id,owner_id,period,beds,residents,bed_rate_cents,resident_rate_cents,
+                amount_cents,status,created_at,owners,subtotal_cents,gst_basis_points,
+                gst_cents,billable_users) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''' ,
+                (invoice_id,owner_id,period,beds,residents,0,FIXED_RESIDENT_RATE_CENTS,
+                 amount,'unpaid',utcnow(),owners,breakdown['subtotal_cents'],
+                 breakdown['gst_basis_points'],breakdown['gst_cents'],breakdown['billable_users']))
+            self.audit(db,'system','invoice_created',invoice_id,{'owner_id':owner_id,'period':period,**breakdown})
             return dict(db.execute('SELECT * FROM ss_invoices WHERE id=?',(invoice_id,)).fetchone())
 
     def invoices(self, owner_id=None):
@@ -373,7 +405,7 @@ class Review(BaseModel):
     remarks: str = Field(default='',max_length=500)
 
 
-def create_router(store:BillingStore, principal_dependency:Callable, count_provider:Callable[[str],tuple[int,int]], legacy_guard=None, activate_payment=None, legacy_invoice_provider=None):
+def create_router(store:BillingStore, principal_dependency:Callable, count_provider:Callable[[str],tuple[int,int]], legacy_guard=None, activate_payment=None, legacy_invoice_provider=None, owner_count_provider=None):
     """principal_dependency MUST return {'id':str,'role':'platform_admin'|'owner', 'owner_id':str optional}.
     count_provider(owner_id) MUST use existing authoritative app records and exclude inactive residents.
     Both must be implemented by the host application before mounting this router.
@@ -431,8 +463,11 @@ def create_router(store:BillingStore, principal_dependency:Callable, count_provi
         beds, residents = count_provider(p['owner_id'])
         if not all(isinstance(x, int) and x >= 0 for x in (beds, residents)):
             raise HTTPException(503, 'Resident count unavailable')
+        owners = owner_count_provider(p['owner_id']) if owner_count_provider else 1
+        estimate = calculate_invoice(residents, owners)
         return {'pricing':store.pricing(),'qr':store.qr(),'billable_residents':residents,
-                'beds':beds,'invoices':store.invoices(p['owner_id']),
+                'billable_owners':owners,'billable_users':estimate['billable_users'],
+                'estimate':estimate,'beds':beds,'invoices':store.invoices(p['owner_id']),
                 'legacy_invoice':legacy_invoice_provider(p['owner_id']) if legacy_invoice_provider else None,
                 'payments':store.submissions(p['owner_id'])}
 
@@ -440,7 +475,8 @@ def create_router(store:BillingStore, principal_dependency:Callable, count_provi
     def owner_invoice(period:str,p=Depends(owner)):
         try:
             beds,residents=count_provider(p['owner_id'])
-            return store.issue_invoice(p['owner_id'],period,beds,residents,legacy_guard=legacy_guard)
+            owners = owner_count_provider(p['owner_id']) if owner_count_provider else 1
+            return store.issue_invoice(p['owner_id'],period,beds,residents,legacy_guard=legacy_guard,owners=owners)
         except (LookupError,ValueError,TypeError) as exc:
             raise HTTPException(400,str(exc)) from exc
 
