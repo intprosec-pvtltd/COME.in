@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../app/controller.dart';
+import '../app/router.dart' show openPage;
 import 'app_theme.dart';
 String inr(dynamic value)=>NumberFormat.currency(locale:'en_IN',
 symbol:'₹',
@@ -77,7 +78,23 @@ class Attribution extends StatelessWidget {
     return Scaffold(appBar:AppBar(title:Text(tr(context,title),
     style:const TextStyle(fontWeight:FontWeight.w800,
     fontSize:21)),
-    actions:actions),
+    actions:[
+      ...actions,
+      if (title != 'Notifications')
+        Builder(builder:(bellContext){
+          final app=AppScope.of(bellContext);
+          final unread=app.rows('notifications').where((n)=>n['read']!=true).length;
+          return IconButton(
+            tooltip:unread==0?'Notifications':'$unread unread notifications',
+            onPressed:()=>openPage(bellContext,'notifications'),
+            icon:Badge(
+              isLabelVisible:unread>0,
+              label:Text(unread>99?'99+':'$unread'),
+              child:const Icon(Icons.notifications_none_outlined),
+            ),
+          );
+        }),
+    ]),
     body:SafeArea(top:false,
     child:refresh==null?list:RefreshIndicator(onRefresh:refresh!,
     child:list)));

@@ -76,7 +76,7 @@ def message_property(s,u,message):
  return int(meta(s,u.tenant_id,'message_meta',message.id).get('property_id',0))
 def chat_access(s,u,pid):
  property_exists(s,u,pid)
- if u.role=='resident' and int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))!=pid:
+ if u.role in ('resident','staff') and int(meta(s,u.tenant_id,'resident_meta' if u.role=='resident' else 'staff_meta',u.id).get('property_id',0) or 0)!=pid:
   raise HTTPException(403,'This community belongs to another PG')
 def visible_property(s,u,pid):
  return u.role!='resident' or int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0))==int(pid)
@@ -119,7 +119,12 @@ class ChangePassword(BaseModel):
 @router.post('/password')
 def password(data:ChangePassword,u:User=Depends(current),s:Session=Depends(db)):
  if not passwords.verify(data.current_password,u.password_hash):raise HTTPException(400,'Current password is incorrect')
- u.password_hash=passwords.hash(data.new_password);put(s,u.tenant_id,'onboarding',u.id,{'must_change':False});put(s,u.tenant_id,'security',u.id,{'changed_at':now().timestamp()});audit(s,u,'password_change',{});commit(s);return {'ok':True,'reauthenticate':True}
+ was_first_login=bool(meta(s,u.tenant_id,'onboarding',u.id).get('must_change',False))
+ u.password_hash=passwords.hash(data.new_password)
+ prior=meta(s,u.tenant_id,'onboarding',u.id)
+ put(s,u.tenant_id,'onboarding',u.id,{**prior,'must_change':False,
+      'documents_required':prior.get('documents_required',False) or (was_first_login and u.role=='resident')})
+ put(s,u.tenant_id,'security',u.id,{'changed_at':now().timestamp()});audit(s,u,'password_change',{});commit(s);return {'ok':True,'reauthenticate':True}
 @router.post('/logout')
 def logout(authorization:str=Header(...),u:User=Depends(current),s:Session=Depends(db)):
  put(s,u.tenant_id,'revoked',hashlib.sha256(authorization.encode()).hexdigest(),{'at':iso(now())});commit(s);return {'ok':True}
@@ -437,7 +442,9 @@ def state(u:User=Depends(current),s:Session=Depends(db)):
  t=s.get(Tenant,u.tenant_id)
  resident_property=meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0)
  accommodation_property=next((p['name'] for p in property_rows(s,u) if p['id']==resident_property),t.name)
- return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices if visible_property(s,u,meta(s,u.tenant_id,'notice_meta',n.id).get('property_id',0))],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',f.id).get('property_id',0))],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':meal_rows(s,u),'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[{'id':r.id,'name':r.name,'role':r.role} for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id)) if u.role in ('owner','manager') or r.id==u.id or (r.role=='resident' and visible_property(s,u,meta(s,u.tenant_id,'resident_meta',r.id).get('property_id',0)))],'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,entity_id=meta(s,u.tenant_id,'alert_meta',a.id).get('entity_id'),property_id=meta(s,u.tenant_id,'alert_meta',a.id).get('property_id'),created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner) and visible_alert(s,u,a)],'payment_methods':payment_destination(s,u,resident_property if u.role=='resident' else 0),'property_payment_methods':[payment_destination(s,u,int(p['id'])) for p in property_rows(s,u) if p.get('archived')!=True] if is_owner else [],'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
+ from identity_api import identity_progress
+ identity_onboarding=identity_progress(s,u) if u.role=='resident' else None
+ return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices if visible_property(s,u,meta(s,u.tenant_id,'notice_meta',n.id).get('property_id',0))],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',f.id).get('property_id',0))],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':meal_rows(s,u),'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[],'identity_onboarding':identity_onboarding,'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,entity_id=meta(s,u.tenant_id,'alert_meta',a.id).get('entity_id'),property_id=meta(s,u.tenant_id,'alert_meta',a.id).get('property_id'),created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner) and visible_alert(s,u,a)],'payment_methods':payment_destination(s,u,resident_property if u.role=='resident' else 0),'property_payment_methods':[payment_destination(s,u,int(p['id'])) for p in property_rows(s,u) if p.get('archived')!=True] if is_owner else [],'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
 
 class PropertyInput(BaseModel):
  name:str=Field(min_length=2,max_length=120)
@@ -679,6 +686,22 @@ class ChatInput(BaseModel):
  property_id:int=Field(default=0,ge=0)
  body:str=Field(min_length=1,max_length=2000)
  reply:str=Field(default='',max_length=300)
+@router.get('/community-members')
+def community_members(property_id:int,u:User=Depends(current),s:Session=Depends(db)):
+ """Return only members assigned to a PG; no cross-property membership leakage."""
+ role(u,'owner','manager','resident','staff')
+ chat_access(s,u,property_id)
+ result=[]
+ for member in s.scalars(select(User).where(User.tenant_id==u.tenant_id)):
+  if member.role in ('owner','manager'):
+   # Organization owner/manager may participate in each of its communities.
+   result.append({'id':member.id,'name':member.name,'role':member.role,'property_id':property_id})
+  elif member.role in ('resident','staff'):
+   assignment=meta(s,u.tenant_id,'resident_meta' if member.role=='resident' else 'staff_meta',member.id)
+   if int(assignment.get('property_id',0) or 0)==property_id:
+    result.append({'id':member.id,'name':member.name,'role':member.role,'property_id':property_id})
+ return result
+
 @router.get('/community-capabilities')
 def community_capabilities(u:User=Depends(current)):
  role(u,'owner','manager','resident')

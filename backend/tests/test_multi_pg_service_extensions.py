@@ -68,6 +68,8 @@ def test_pg_specific_meals_joining_codes_and_payment_accounts():
     south = invited_resident(pg2)
     north_state = req('GET', '/v3/state', north)
     south_state = req('GET', '/v3/state', south)
+    assert north_state['identity_onboarding']['needs_submission'] is True
+    assert south_state['identity_onboarding']['needs_submission'] is True
     assert north_state['payment_methods']['upi_id'] == 'north@upi'
     assert south_state['payment_methods']['upi_id'] == 'south@upi'
     assert all(m['property_id'] == pg1 for m in north_state['meals'])
@@ -76,3 +78,16 @@ def test_pg_specific_meals_joining_codes_and_payment_accounts():
     assert client.get(f'/api/v3/messages?property_id={pg2}', headers=north).status_code == 403
     msg = req('POST', '/v3/messages', north, {'property_id': pg1, 'body': 'North only'}, 201)
     assert msg['id'] not in [m['id'] for m in req('GET', f'/v3/messages?property_id={pg2}', owner)]
+
+    # PG membership must be isolated on the server, even for multi-PG owners.
+    north_members = req('GET', f'/v3/community-members?property_id={pg1}', owner)
+    south_members = req('GET', f'/v3/community-members?property_id={pg2}', owner)
+    north_resident_id = req('GET', '/v3/state', north)['profile']['id']
+    south_resident_id = req('GET', '/v3/state', south)['profile']['id']
+    assert north_resident_id in [m['id'] for m in north_members]
+    assert south_resident_id not in [m['id'] for m in north_members]
+    assert south_resident_id in [m['id'] for m in south_members]
+    assert north_resident_id not in [m['id'] for m in south_members]
+    assert client.get(f'/api/v3/community-members?property_id={pg2}',headers=north).status_code == 403
+    assert client.get(f'/api/v3/community-members?property_id={pg1}',headers=south).status_code == 403
+    assert all(m['property_id']==pg1 for m in north_members)

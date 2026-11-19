@@ -100,7 +100,7 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
     final monthly=residents*39;
     return Scaffold(
       backgroundColor:const Color(0xfffaf6fc),
-      appBar:AppBar(title:const Text('Stay Sync Manage · Subscription')),
+      appBar:AppBar(title:const Text('My subscription')),
       body:RefreshIndicator(
         onRefresh:load,
         child:ListView(padding:const EdgeInsets.all(16),children:[
@@ -129,18 +129,18 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
           ),
           const SizedBox(height:14),
           panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('Current monthly bill',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
+            const Text('This month’s invoice',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
             const SizedBox(height:8),
             Text('Billing month: $period'),
             const SizedBox(height:10),
             if(thisMonth.isNotEmpty)Text('Invoice ${thisMonth.first['status']} · ${money(thisMonth.first['amount_cents'])}',style:const TextStyle(fontWeight:FontWeight.bold)),
             if(legacyThisMonth)...[
-              Text('Existing invoice #${legacy['id']} · ${legacy['status']}',
+              Text('Previously issued invoice #${legacy['id']} · ${legacy['status']}',
                   style:const TextStyle(fontWeight:FontWeight.bold)),
               Text('Original amount: ${money(legacy['amount_cents'])}'),
               const SizedBox(height:6),
-              const Text('This month was already billed through the administrator. A second invoice is blocked to prevent duplicate charges. For payment or reconciliation, contact the platform administrator.',
-                  style:TextStyle(fontSize:12)),
+              const Text('This invoice was issued at the previous price and keeps its original amount. The ₹39 plan applies to new eligible invoices. Contact platform support to settle this invoice.',
+                  style:TextStyle(fontSize:13)),
             ],
             const SizedBox(height:10),
             if(!legacyThisMonth)FilledButton.icon(

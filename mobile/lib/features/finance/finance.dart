@@ -137,11 +137,11 @@ dynamic>> scopedInvoices(AppController app){
         if(app.owner)...[
           const SizedBox(height:7),
           Row(children:[
-            const Icon(Icons.apartment_rounded, size:16, color:lavender),
+            const Icon(Icons.apartment_rounded, size:19, color:plum),
             const SizedBox(width:6),
             Expanded(child:Text(
               pgNameForResident(app, app.find('residents', (i['resident_id'] as num?)?.toInt())),
-              style:const TextStyle(fontSize:12, color:muted, fontWeight:FontWeight.w700),
+              style:const TextStyle(fontSize:14, color:plum, fontWeight:FontWeight.w700),
             )),
           ]),
         ],
@@ -799,8 +799,8 @@ int id)async{
         child:Row(children:[
           Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text('${r['description']}',style:const TextStyle(fontWeight:FontWeight.w800)),
-            Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'} · ${r['category']}',
-              style:const TextStyle(color:muted,fontSize:11))])),
+            Row(children:[const Icon(Icons.apartment_rounded,size:17,color:plum),const SizedBox(width:5),Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'} · ${r['category']}',
+              style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))])])),
           Text(inr(r['amount']),style:const TextStyle(fontWeight:FontWeight.w800)),
           const Icon(Icons.edit_outlined,size:17)
         ])),
@@ -1024,7 +1024,8 @@ int id)async{
       const SizedBox(height:12),
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
-        const Text('Pay directly to your PG owner', style:TextStyle(fontWeight:FontWeight.w800, fontSize:16)),
+        Text(app.owner?'Payment destination for this PG':'Pay directly to your PG owner',
+          style:const TextStyle(fontWeight:FontWeight.w800, fontSize:16)),
         const SizedBox(height:10),
         if('${d['upi_id']??''}'.trim().isNotEmpty)...[
           Text('UPI ID: ${d['upi_id']}',style:const TextStyle(fontWeight:FontWeight.w700)),
@@ -1048,8 +1049,10 @@ int id)async{
                 child:Image.memory(snapshot.data!,width:220,height:220,fit:BoxFit.contain)));
             }),
           ])),
-        if(d['qr_file_id']==null)const Padding(padding:EdgeInsets.only(top:12),
-          child:Text('No QR image uploaded yet. Check payment details with your PG owner.',style:TextStyle(color:muted))),
+        if(d['qr_file_id']==null)Padding(padding:const EdgeInsets.only(top:12),
+          child:Text(app.owner?'No UPI QR uploaded for this PG yet. Use the Upload QR button below.':
+          'No QR image uploaded yet. Contact your PG owner for payment details.',
+          style:const TextStyle(color:muted))),
         const SizedBox(height:8),
         const Text('Always verify the beneficiary name in your UPI or bank app before sending money.',
           style:TextStyle(color:muted,fontSize:12)),
@@ -1064,7 +1067,8 @@ int id)async{
             ]!.text=key=='bank_account'?'':'${d[key]??''}';
           }setState(()=>editing=!editing);
         },
-        child:const Text('Update payment settings')),
+        child:Text(editing?'Close bank / UPI editor':
+          (d['upi_id']==null && d['bank_name']==null ? 'Add bank account / UPI details':'Edit bank account / UPI details'))),
         FilledButton.icon(
           onPressed:busy?null:()async{
             setState(()=>busy=true);
@@ -1078,12 +1082,14 @@ int id)async{
               final app=AppScope.of(context);
               final uploaded=await app.api.upload('/v3/files/owner_qr',f.name,f.bytes!,mimeType(f.name));
               await app.mutate('/v3/payment-qr',method:'PUT',body:{'file_id':(uploaded as Map)['id'],'property_id':pid});
-              if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Owner QR image updated')));
+              if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+                d['qr_file_id'] is int?'UPI QR replaced for this PG':'UPI QR uploaded for this PG')));
             }catch(e){if(mounted)feedback(context,e);}
             finally{if(mounted)setState(()=>busy=false);}
           },
-          icon:const Icon(Icons.qr_code_2),
-          label:const Text('Upload / replace my UPI QR image')),
+          icon:busy?const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)):
+            const Icon(Icons.qr_code_2),
+          label:Text(busy?'Uploading QR…':(d['qr_file_id'] is int?'Change UPI QR image':'Upload UPI QR image'))),
         const SizedBox(height:10),
         if(editing)Surface(child:Form(key:form,
         child:Column(children:[

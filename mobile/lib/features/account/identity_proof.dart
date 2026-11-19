@@ -26,6 +26,8 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
   bool uploading = false;
   bool consent = false;
   bool requested = false;
+  Map<String,dynamic>? portrait;
+  bool portraitLoading = false;
   String? error;
 
   bool get ownerView => widget.residentId != null;
@@ -54,8 +56,12 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
           ? '/identity/residents/${widget.residentId}/proofs'
           : '/identity/proofs/me';
       final response = await app.api.request(path);
+      final portraitResult = await app.api.request(ownerView
+          ? '/identity/residents/${widget.residentId}/portrait'
+          : '/identity/portrait/me');
       if (!mounted) return;
       setState(() {
+        portrait = portraitResult is Map ? Map<String,dynamic>.from(portraitResult) : null;
         proofs = (response as List)
             .map((v) => Map<String, dynamic>.from(v as Map)).toList();
         consent = false;
@@ -100,6 +106,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         '/identity/proofs', selected.name, selected.bytes!, mime);
       if (!mounted) return;
       await refresh();
+      if (mounted) await AppScope.of(context).refresh();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Document submitted. Your PG owner will review it.')));
     } catch (e) {
@@ -299,6 +306,77 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     ));
   }
 
+  Future<void> uploadPortrait() async {
+    if (portraitLoading || ownerView || portrait?['status']=='pending') return;
+    if (!consent) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Please agree to share your photograph with your PG owner.')));
+      return;
+    }
+    final picked=await FilePicker.platform.pickFiles(
+      type:FileType.custom,allowedExtensions:['jpg','jpeg','png'],withData:true);
+    if(picked==null||picked.files.isEmpty||!mounted)return;
+    final selected=picked.files.single;
+    if(selected.bytes==null||selected.bytes!.isEmpty||selected.size>2*1024*1024){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose a JPG or PNG photo smaller than 2 MB.')));
+      return;
+    }
+    setState(()=>portraitLoading=true);
+    try{
+      await AppScope.of(context).api.upload('/identity/portrait',selected.name,
+        selected.bytes!,selected.extension?.toLowerCase()=='png'?'image/png':'image/jpeg');
+      await refresh();
+      if(mounted)await AppScope.of(context).refresh();
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Photo upload failed: $e')));
+    }finally{if(mounted)setState(()=>portraitLoading=false);}
+  }
+
+  Future<void> viewPortrait() async {
+    if(portrait==null)return;
+    try{
+      final bytes=await AppScope.of(context).api.download('/identity/portrait/${portrait!['id']}/file');
+      if(!mounted)return;
+      await showDialog<void>(context:context,builder:(ctx)=>Dialog(child:Column(
+        mainAxisSize:MainAxisSize.min,children:[
+          Flexible(child:InteractiveViewer(child:Image.memory(Uint8List.fromList(bytes),fit:BoxFit.contain))),
+          TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close')),
+        ])));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Cannot open photograph.')));}
+  }
+
+  Future<void> reviewPortrait(String decision) async {
+    if(portrait==null||portrait!['status']!='pending')return;
+    final confirmed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:Text(decision=='approved'?'Approve photograph?':'Request a new photograph?'),
+      content:const Text('This action is recorded for the resident.'),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+        FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Confirm'))]));
+    if(confirmed!=true||!mounted)return;
+    try{
+      await AppScope.of(context).api.request('/identity/portrait/${portrait!['id']}/review',
+        method:'POST',body:{'decision':decision,'note':''});
+      await refresh();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Unable to review photograph.')));}
+  }
+
+  Widget _portraitCard()=>Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    const Text('Passport-size photograph',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
+    const SizedBox(height:8),
+    Text(portrait==null?'Not submitted':'Status: ${portrait!['status']}',
+      style:const TextStyle(fontSize:14)),
+    const SizedBox(height:10),
+    if(portrait!=null)OutlinedButton.icon(onPressed:viewPortrait,
+      icon:const Icon(Icons.visibility_outlined),label:const Text('View photograph')),
+    if(!ownerView&&(portrait==null||portrait!['status']=='rejected'||portrait!['status']=='approved'))
+      FilledButton.icon(onPressed:portraitLoading?null:uploadPortrait,
+        icon:const Icon(Icons.add_a_photo_outlined),label:Text(portraitLoading?'Uploading…':portrait==null?'Upload photograph':'Change photograph')),
+    if(ownerView&&portrait?['status']=='pending')Row(children:[
+      TextButton(onPressed:()=>reviewPortrait('approved'),child:const Text('Approve photo')),
+      TextButton(onPressed:()=>reviewPortrait('rejected'),child:const Text('Request replacement')),
+    ]),
+  ]));
+
   Widget _uploadForm() => Surface(child: Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -325,7 +403,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         ]),
       ),
       const SizedBox(height: 10),
-      const Text('Mask any identification numbers not required for PG review.',
+      const Text('Use masked Aadhaar or another acceptable ID. Do not share an unmasked Aadhaar number.',
         style: TextStyle(fontSize: 12, color: Color(0xFF76657C))),
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
@@ -380,7 +458,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
 
   @override
   Widget build(BuildContext context) => PageBody(
-    title: ownerView ? 'Resident ID proof' : 'Identity verification',
+    title: ownerView ? 'Resident verification' : 'Complete your verification',
     subtitle: ownerView
         ? 'Documents submitted by this resident. Only your PG team can review.'
         : 'Identity documents are reviewed manually by your PG owner.',
@@ -394,6 +472,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
           TextButton(onPressed: refresh, child: const Text('Try again')),
         ])),
       if (!loading && error == null) ...[
+        _portraitCard(),
         if (!ownerView) ...[
           if (latest != null) _residentSummary(latest!),
           if (canSubmit) ...[

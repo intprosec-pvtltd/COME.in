@@ -53,32 +53,11 @@ class _DashboardState extends State<Dashboard> {
     return PageBody(title:'',
     refresh:app.refresh,
     actions:[
-      IconButton(tooltip:'Notifications',
-      onPressed:()=>openPage(context,
-      'notifications'),
-      icon:const Icon(Icons.notifications_none))
+
     ],
     children:[
       const OfficialBrand(width:155),
       const SizedBox(height:22),
-      if(app.owner && app.trial != null) Padding(
-        padding: const EdgeInsets.only(bottom:14),
-        child: Material(
-          color: const Color(0xFFF2EAF8),
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              const Text('COME.in subscription',style:TextStyle(fontWeight:FontWeight.w800,color:plum)),
-              const SizedBox(height:5),
-              Text(_trialMessage(app.trial!),style:const TextStyle(color:muted,fontSize:12)),
-              if(app.trial!['status']=='trial_active')
-                Text('${app.trial!['days_remaining'] ?? 0} days remaining',style:const TextStyle(fontWeight:FontWeight.w700,color:plum)),
-              const Text('For activation or extension, contact IntProSec platform support.',style:TextStyle(fontSize:11,color:muted)),
-            ]),
-          ),
-        ),
-      ),
       if(app.profile['role']=='owner') Padding(
         padding:const EdgeInsets.only(bottom:14),
         child:FeatureTile(
@@ -104,8 +83,8 @@ class _DashboardState extends State<Dashboard> {
       if(!app.owner && !app.staff) Padding(
         padding: const EdgeInsets.only(top: 12),
         child: FeatureTile(
-          title: 'Submit identity proof',
-          subtitle: 'Upload JPG, PNG or PDF for your PG owner to review',
+          title: 'Complete resident verification',
+          subtitle: 'Submit a passport photo and masked identity document',
           icon: Icons.badge_outlined,
           onTap: () => openPage(context, 'identityProof'),
         ),
@@ -196,34 +175,6 @@ class _DashboardState extends State<Dashboard> {
         Icons.handyman_outlined,
         'complaints')
       ]),
-      SectionTitle(app.owner?'Make things happen':'Your daily essentials'),
-      if(app.owner)...[
-        FeatureTile(title:'Rent & dues',
-        subtitle:'Balances, verification and receipts',
-        icon:Icons.payments_outlined,
-        onTap:()=>openPage(context,
-        'dues')),
-        FeatureTile(title:'Rooms & beds',
-        subtitle:'Spaces for your residents',
-        icon:Icons.bed_outlined,
-        onTap:()=>openPage(context,
-        'rooms'))
-      ],
-      FeatureTile(title:'Facility updates',
-      subtitle:'Water, power and Wi-Fi',
-      icon:Icons.water_drop_outlined,
-      onTap:()=>openPage(context,
-      'facilities')),
-      FeatureTile(title:app.owner?'Complaints':'My complaints',
-      subtitle:'$issues active requests',
-      icon:Icons.handyman_outlined,
-      onTap:()=>openPage(context,
-      'complaints')),
-      if(!app.staff)FeatureTile(title:'Community',
-      subtitle:'Your people, one conversation',
-      icon:Icons.forum_outlined,
-      onTap:()=>openPage(context,
-      'community')),
       const SectionTitle('Latest announcements'),
       for(final n in app.rows('notices').where((n)=>n[
         'status'
@@ -337,9 +288,6 @@ class _DashboardState extends State<Dashboard> {
       ('community',
       'Community chat',
       Icons.forum_outlined),
-      ('notifications',
-      'Notifications',
-      Icons.notifications_outlined),
       ('account',
       'Profile & settings',
       Icons.settings_outlined)
@@ -369,15 +317,5 @@ class _DashboardState extends State<Dashboard> {
         ])))
       ])
     ]);
-  }
-}
-
-String _trialMessage(Map<String,dynamic> trial) {
-  switch (trial['status']) {
-    case 'trial_active': return 'Your 15-day trial is active.';
-    case 'trial_expired': return 'Your trial has ended. Existing records remain available.';
-    case 'paid': return 'Your organization subscription is active.';
-    case 'suspended': return 'Organization access requires platform administrator review.';
-    default: return 'Trial approval is pending with IntProSec.';
   }
 }

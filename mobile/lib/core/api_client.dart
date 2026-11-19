@@ -59,19 +59,63 @@ class ApiClient {
     } on FormatException {
       if (response.statusCode >= 400) {
         throw ApiException(response.statusCode,
-            'PG server returned HTTP ${response.statusCode}. Please retry or check backend logs.');
+            'The server is temporarily unavailable. Please try again.');
       }
-      throw const ApiException(0, 'PG server returned an unexpected response format.');
+      throw const ApiException(0, 'Unable to read the server response. Please try again.');
     }
+  }
+
+  // Map structured Pydantic errors to user-facing instructions.
+  static String _validationMessage(dynamic detail) {
+    if (detail is! List || detail.isEmpty) {
+      return 'Please review the information and try again.';
+    }
+    final messages = <String>[];
+    for (final issue in detail) {
+      if (issue is! Map) continue;
+      final location = issue['loc'];
+      final key = location is List && location.isNotEmpty
+          ? location.last.toString()
+          : 'field';
+      final field = key.replaceAll('_', ' ');
+      final label = field.isNotEmpty
+          ? '${field[0].toUpperCase()}${field.substring(1)}'
+          : 'Field';
+      final type = '${issue['type'] ?? ''}';
+      final ctx = issue['ctx'];
+      if (type == 'missing') {
+        messages.add('$label is required.');
+      } else if (type == 'string_too_short') {
+        final minimum = ctx is Map ? ctx['min_length'] : null;
+        messages.add(minimum is num
+            ? '$label must contain at least $minimum characters.'
+            : 'Please enter a longer $field.');
+      } else if (type == 'string_too_long') {
+        messages.add('$label is too long.');
+      } else if (type == 'greater_than' || type == 'greater_than_equal') {
+        messages.add('Please enter a larger value for $field.');
+      } else if (type == 'less_than' || type == 'less_than_equal') {
+        messages.add('Please enter a smaller value for $field.');
+      } else {
+        messages.add('Please check $field.');
+      }
+      if (messages.length >= 3) break;
+    }
+    return messages.isEmpty
+        ? 'Please review the information and try again.'
+        : messages.join(' ');
   }
 
   static void _requireSuccess(http.Response response, dynamic decoded) {
     if (response.statusCode < 400) return;
     final detail = decoded is Map ? decoded['detail'] : null;
+    if (response.statusCode == 422) {
+      throw ApiException(422, _validationMessage(detail));
+    }
     throw ApiException(response.statusCode,
         detail is String && detail.isNotEmpty
             ? detail
-            : 'PG server returned HTTP ${response.statusCode}.');
+            : 'Unable to complete the request. Please try again.');
   }
 
   Future<Uint8List> download(String path) async {

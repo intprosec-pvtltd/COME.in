@@ -562,3 +562,31 @@ def audit(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
 def install_schema():
     # Creates only new tables. Existing tenant/room/resident schemas are untouched.
     Base.metadata.create_all(engine, tables=[AdminUser.__table__,PGProperty.__table__,RoomAssignment.__table__,ResidentAssignment.__table__,Subscription.__table__,SubscriptionInvoice.__table__,ResidentBillingOverride.__table__,AdminAudit.__table__,PlatformUserAccess.__table__])
+
+
+@router.get('/resident-verifications')
+def resident_verification_overview(admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    """Admin-only metadata overview; never sends photos or identity proof bytes."""
+    from identity_api import ResidentProof, ResidentPortrait, selected_portrait
+    from v3_api import meta
+    result = []
+    tenants = {t.id: t.name for t in s.scalars(select(Tenant))}
+    all_proofs = s.scalars(select(ResidentProof).order_by(ResidentProof.id.desc())).all()
+    latest_proofs = {}
+    for proof in all_proofs:
+        latest_proofs.setdefault((proof.tenant_id, proof.resident_id), proof)
+    for resident in s.scalars(select(User).where(User.role == 'resident')):
+        proof = latest_proofs.get((resident.tenant_id, resident.id))
+        photo = selected_portrait(s, resident.tenant_id, resident.id)
+        assignment = meta(s, resident.tenant_id, 'resident_meta', resident.id)
+        pid = int(assignment.get('property_id', 0) or 0)
+        property_info = meta(s, resident.tenant_id, 'property', pid) if pid else meta(s, resident.tenant_id, 'primary_property', 0)
+        result.append({
+            'resident_id': resident.id, 'resident_name': resident.name,
+            'tenant_id': resident.tenant_id, 'organization': tenants.get(resident.tenant_id, ''),
+            'property_id': pid,
+            'property_name': property_info.get('name') or tenants.get(resident.tenant_id, ''),
+            'photo_status': photo.status if photo else 'not_submitted',
+            'identity_status': proof.status if proof else 'not_submitted',
+        })
+    return result

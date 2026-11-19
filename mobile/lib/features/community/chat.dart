@@ -327,9 +327,17 @@ class ChatPage extends StatefulWidget {
       ]))
     ]),
     actions:[
+      IconButton(
+        tooltip:'Notifications',
+        onPressed:()=>openPage(context,'notifications'),
+        icon:Badge(
+          isLabelVisible:a.rows('notifications').any((n)=>n['read']!=true),
+          child:const Icon(Icons.notifications_none_outlined),
+        ),
+      ),
       IconButton(tooltip:'Group information',
       onPressed:()=>openPage(context,
-      'groupInfo'),
+      'groupInfo',args:{'property_id':communityPropertyId}),
       icon:const Icon(Icons.more_horiz))
     ]),
     body:Column(children:[
@@ -513,29 +521,38 @@ class ChatPage extends StatefulWidget {
     const SizedBox(height:5),
     const Row(mainAxisSize:MainAxisSize.min, children:[Icon(Icons.download_outlined,size:15,color:lavender), SizedBox(width:5), Text('View / save attachment',style:TextStyle(fontSize:11,color:lavender))])
   ])));
-} class GroupInfoPage extends StatelessWidget {
-  const GroupInfoPage({
-    super.key
-  });
+ } class GroupInfoPage extends StatefulWidget {
+  const GroupInfoPage({super.key, required this.propertyId});
+  final int propertyId;
+  @override State<GroupInfoPage> createState()=>_GroupInfoPageState();
+}
+class _GroupInfoPageState extends State<GroupInfoPage> {
+  late Future<List<Map<String,dynamic>>> members;
+  @override void didChangeDependencies(){
+    super.didChangeDependencies();
+    // Fetch fresh, authorized PG members from the backend, never the owner-wide cache.
+    members=AppScope.of(context).api.request('/v3/community-members?property_id=${widget.propertyId}')
+      .then((v)=>(v as List).map((item)=>Map<String,dynamic>.from(item as Map)).toList());
+  }
   @override Widget build(BuildContext context){
-    final app=AppScope.of(context);
-    return PageBody(title:'Community information',
-    subtitle:'Private to ${app.profile['tenant']?['name']}',
-    children:[
-      const Center(child:OfficialBrand(width:90,
-      iconOnly:true)),
+    return PageBody(title:'Community information',children:[
+      const Center(child:OfficialBrand(width:90,iconOnly:true)),
       const SizedBox(height:20),
       const Text('Share useful updates and keep conversations respectful. Report maintenance through Complaints so it can be tracked.',
-      style:TextStyle(color:muted,
-      fontSize:12,
-      height:1.6)),
+        style:TextStyle(color:muted,fontSize:12,height:1.6)),
       const SectionTitle('Members'),
-      for(final m in app.rows('members'))Surface(child:ListTile(contentPadding:EdgeInsets.zero,
-      leading:CircleAvatar(backgroundColor:lavender.withValues(alpha:.2),
-      child:Text('${m['name']}'.substring(0,
-      1))),
-      title:Text('${m['name']}'),
-      subtitle:Text('${m['role']}')))
+      FutureBuilder<List<Map<String,dynamic>>>(future:members,builder:(ctx,snapshot){
+        if(snapshot.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+        if(snapshot.hasError)return const Text('Could not load members for this PG. Please try again.');
+        final rows=snapshot.data??[];
+        if(rows.isEmpty)return const Text('No members assigned to this PG yet.');
+        return Column(children:[for(final m in rows) Surface(child:ListTile(
+          contentPadding:EdgeInsets.zero,
+          leading:CircleAvatar(backgroundColor:lavender.withValues(alpha:.2),
+            child:Text('${m['name']}'.isEmpty?'?':'${m['name']}'[0])),
+          title:Text('${m['name']}'),subtitle:Text('${m['role']}'),
+        ))]);
+      }),
     ]);
   }
 }

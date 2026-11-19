@@ -5,6 +5,7 @@ import 'app/router.dart';
 import 'core/app_theme.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/account/account.dart';
+import 'features/account/identity_proof.dart';
 void main(){
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const PGApp());
@@ -40,5 +41,5 @@ void main(){
   locale:Locale(controller.languageCode),
   supportedLocales:const [Locale('en'),Locale('hi'),Locale('ta'),Locale('te'),Locale('kn'),Locale('ml')],
   localizationsDelegates:const [GlobalMaterialLocalizations.delegate,GlobalWidgetsLocalizations.delegate,GlobalCupertinoLocalizations.delegate],
-  home:controller.restoring?const SplashScreen():!controller.onboardingSeen?const WelcomeScreen():!controller.signedIn?const SignInScreen():controller.profile['must_change_password']==true?const FirstLoginPasswordPage():const AppShell())));
+  home:controller.restoring?const SplashScreen():!controller.onboardingSeen?const WelcomeScreen():!controller.signedIn?const SignInScreen():controller.profile['must_change_password']==true?const FirstLoginPasswordPage():controller.profile['role']=='resident' && (controller.data['identity_onboarding'] as Map?)?['needs_submission']==true?const IdentityProofPage():const AppShell())));
 }

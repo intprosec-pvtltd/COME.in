@@ -55,6 +55,19 @@ def test_resident_proof_is_tenant_scoped(monkeypatch):
             assert client.post(f'/api/identity/proofs/{fid}/review',headers=headers(0),json={'decision':'rejected'}).status_code==409
             assert client.get(f'/api/identity/proofs/{fid}/file',headers=headers(0)).content==payload
 
+            # Passport photograph has an independent upload/review lifecycle.
+            portrait=client.post('/api/identity/portrait',headers=headers(1),
+                files={'file':('portrait.png',payload,'image/png')})
+            assert portrait.status_code==201,portrait.text
+            photo_id=portrait.json()['id']
+            assert client.get('/api/identity/portrait/me',headers=headers(1)).json()['id']==photo_id
+            assert client.get(f'/api/identity/portrait/{photo_id}/file',headers=headers(3)).status_code==404
+            assert client.get(f'/api/identity/residents/{identities[1][0]}/portrait',headers=headers(2)).status_code==404
+            assert client.post(f'/api/identity/portrait/{photo_id}/review',headers=headers(1),json={'decision':'approved'}).status_code==403
+            assert client.post(f'/api/identity/portrait/{photo_id}/review',headers=headers(0),json={'decision':'approved'}).status_code==200
+            assert client.get(f'/api/identity/portrait/{photo_id}/file',headers=headers(0)).content==payload
+
+
             # Once approved, the resident must not submit another proof.
             assert client.post('/api/identity/proofs',headers=headers(1),
                 files={'file':('another.png',payload,'image/png')}).status_code==409

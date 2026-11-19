@@ -324,7 +324,7 @@ class ComplaintsPage extends StatefulWidget {
           StatusPill('${f['status']}')
         ]),
         const SizedBox(height:12),
-        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(f['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:muted,fontSize:11)),
+        Row(children:[const Icon(Icons.apartment_rounded,size:19,color:plum),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(f['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))]),
         const SizedBox(height:8),
         Text('${f['details']}',
         style:const TextStyle(fontSize:12)),
@@ -386,7 +386,7 @@ class ComplaintsPage extends StatefulWidget {
           ]==true)const StatusPill('Important')
         ]),
         const SizedBox(height:12),
-        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:muted,fontSize:11)),
+        Row(children:[const Icon(Icons.apartment_rounded,size:19,color:plum),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))]),
         const SizedBox(height:8),
         Text('${n['body']}',
         maxLines:3,
@@ -436,10 +436,18 @@ class ComplaintsPage extends StatefulWidget {
       EmptyState('Notice unavailable.')
     ]);
     return PageBody(title:'${n['title']}',
-    subtitle:'${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.profile['tenant']?['name']??app.data['accommodation']?['property']??'Primary PG'})['name']} · Posted by your PG owner',
     children:[
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
+        Row(children:[
+          const Icon(Icons.apartment_rounded,color:plum,size:22),
+          const SizedBox(width:9),
+          Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.profile['tenant']?['name']??app.data['accommodation']?['property']??'Primary PG'})['name']}',
+            style:const TextStyle(fontSize:15,fontWeight:FontWeight.w800,color:plum))),
+        ]),
+        const SizedBox(height:6),
+        const Text('Posted by your PG owner',style:TextStyle(color:muted,fontSize:12)),
+        const Divider(height:25),
         if(n[
           'important'
         ]==true)const StatusPill('Important'),

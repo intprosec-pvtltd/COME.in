@@ -95,9 +95,11 @@ async def submit_proof(file: UploadFile = File(...), u: User = Depends(current),
     put(s, u.tenant_id, 'identity_risk_v31', p.id, result)
     # Show a new notice in the existing PG owner notification feed.
     from v3_api import alert
+    from v3_api import meta
+    pg_id=int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0) or 0)
     alert(s, u, 'Resident ID proof submitted',
           f'{u.name} submitted an identity document for review.',
-          'residents', audience='owners')
+          'residents', audience='owners', property_id=pg_id, entity_id=u.id)
     s.commit()
     s.refresh(p)
     return _record(p, stored_risk=result)
@@ -157,3 +159,111 @@ def review_proof(identifier: int, data: ProofReview,
     s.refresh(p)
     from v3_api import meta
     return _record(p, stored_risk=meta(s, u.tenant_id, 'identity_risk_v31', p.id) or None)
+
+
+# Additive resident profile photograph workflow. Identity documents and portraits
+# are kept separate, private, and are never published to a community feed.
+class ResidentPortrait(Base):
+    __tablename__ = 'staysync_resident_portraits'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey('tenants.id'), index=True)
+    resident_id: Mapped[int] = mapped_column(ForeignKey('users.id'), index=True)
+    mime: Mapped[str] = mapped_column(String(30))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    status: Mapped[str] = mapped_column(String(20), default='pending')
+    note: Mapped[str] = mapped_column(String(500), default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+def portrait_record(item):
+    return {'id': item.id, 'resident_id': item.resident_id,
+            'status': item.status, 'mime': item.mime, 'review_note': item.note,
+            'created_at': item.created_at.isoformat() if item.created_at else ''}
+
+
+def selected_portrait(s, tenant_id, resident_id):
+    return s.scalar(select(ResidentPortrait).where(
+        ResidentPortrait.tenant_id == tenant_id,
+        ResidentPortrait.resident_id == resident_id).order_by(ResidentPortrait.id.desc()).limit(1))
+
+
+@router.post('/portrait', status_code=201)
+async def upload_portrait(file: UploadFile = File(...), u: User = Depends(current), s: Session = Depends(db)):
+    role(u, 'resident')
+    mime = (file.content_type or '').lower()
+    data = await file.read(2 * 1024 * 1024 + 1)
+    if not data or len(data) > 2 * 1024 * 1024:
+        raise HTTPException(413, 'Choose a photo smaller than 2 MB')
+    if not (mime == 'image/jpeg' and data.startswith(b'\xff\xd8\xff') or
+            mime == 'image/png' and data.startswith(b'\x89PNG\r\n\x1a\n')):
+        raise HTTPException(415, 'Please upload a JPG or PNG photograph')
+    s.scalar(select(User).where(User.id == u.id, User.tenant_id == u.tenant_id).with_for_update())
+    previous = selected_portrait(s, u.tenant_id, u.id)
+    if previous and previous.status == 'pending':
+        raise HTTPException(409, 'Your previous photograph is awaiting review')
+    item = ResidentPortrait(tenant_id=u.tenant_id, resident_id=u.id,
+                            mime=mime, content=data)
+    s.add(item)
+    from v3_api import alert, meta
+    pid=int(meta(s,u.tenant_id,'resident_meta',u.id).get('property_id',0) or 0)
+    alert(s,u,'Resident photograph submitted',
+          f'{u.name} uploaded a profile photograph for review.',
+          'residents',audience='owners',property_id=pid,entity_id=u.id)
+    s.commit()
+    s.refresh(item)
+    return portrait_record(item)
+
+
+@router.get('/portrait/me')
+def my_portrait(u: User = Depends(current), s: Session = Depends(db)):
+    role(u, 'resident')
+    item=selected_portrait(s,u.tenant_id,u.id)
+    return portrait_record(item) if item else None
+
+
+@router.get('/residents/{resident_id}/portrait')
+def resident_portrait(resident_id: int,u: User = Depends(current), s: Session = Depends(db)):
+    role(u, 'owner', 'manager')
+    resident=s.scalar(select(User).where(User.id==resident_id,User.tenant_id==u.tenant_id,User.role=='resident'))
+    if not resident: raise HTTPException(404,'Resident not found')
+    item=selected_portrait(s,u.tenant_id,resident_id)
+    return portrait_record(item) if item else None
+
+
+@router.get('/portrait/{identifier}/file')
+def portrait_file(identifier: int,u: User = Depends(current),s: Session = Depends(db)):
+    item=s.scalar(select(ResidentPortrait).where(
+        ResidentPortrait.id==identifier,ResidentPortrait.tenant_id==u.tenant_id))
+    if not item or (u.role not in ('owner','manager') and item.resident_id != u.id):
+        raise HTTPException(404,'Photograph not found')
+    return Response(item.content,media_type=item.mime,headers={
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+        'Content-Disposition':'attachment; filename="resident-portrait"'})
+
+
+@router.post('/portrait/{identifier}/review')
+def review_portrait(identifier: int,decision: ProofReview,u: User = Depends(current),s: Session = Depends(db)):
+    role(u, 'owner', 'manager')
+    item=s.scalar(select(ResidentPortrait).where(
+        ResidentPortrait.id==identifier,ResidentPortrait.tenant_id==u.tenant_id))
+    if not item or item.status!='pending' or selected_portrait(s,u.tenant_id,item.resident_id).id!=item.id:
+        raise HTTPException(409,'Only the latest pending photograph can be reviewed')
+    item.status=decision.decision
+    item.note=decision.note.strip()
+    s.commit()
+    return portrait_record(item)
+
+
+def identity_progress(s: Session, u: User):
+    """Post-password-change onboarding state, scoped to authenticated resident."""
+    if u.role!='resident':return None
+    from v3_api import meta
+    required=bool(meta(s,u.tenant_id,'onboarding',u.id).get('documents_required',False))
+    proof=s.scalar(select(ResidentProof).where(
+        ResidentProof.tenant_id==u.tenant_id,
+        ResidentProof.resident_id==u.id).order_by(ResidentProof.id.desc()).limit(1))
+    photo=selected_portrait(s,u.tenant_id,u.id)
+    return {'required':required,
+        'photo_submitted':photo is not None and photo.status!='rejected',
+        'proof_submitted':proof is not None and proof.status!='rejected',
+        'needs_submission':required and (photo is None or photo.status=='rejected' or proof is None or proof.status=='rejected')}

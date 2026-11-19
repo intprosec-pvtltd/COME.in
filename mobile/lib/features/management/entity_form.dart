@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../core/design.dart';
+import '../../core/api_client.dart';
 class FieldSpec {
   const FieldSpec(this.key,
   this.label,
@@ -208,7 +209,7 @@ class EntityForm extends StatefulWidget {
         f.key
       ]!.text=f.options!.first;
     }property=(widget.initial['property_id'] as num?)?.toInt()??
-        (['expense','facility','notice','meal','booking'].contains(widget.kind)?-1:0);
+        (['expense','facility','notice','meal','booking','staff'].contains(widget.kind)?-1:0);
   } @override void didChangeDependencies(){
     super.didChangeDependencies();
     final selected=AppScope.of(context).propertyId;
@@ -225,7 +226,7 @@ class EntityForm extends StatefulWidget {
     super.dispose();
   } Future<void> save()async{
     if(!form.currentState!.validate())return;
-    if(['expense','facility','notice','meal','booking'].contains(widget.kind)&&property<0){
+    if(['expense','facility','notice','meal','booking','staff'].contains(widget.kind)&&property<0){
       setState(()=>error='Select the PG property before saving.');
       return;
     }
@@ -269,7 +270,9 @@ class EntityForm extends StatefulWidget {
         Navigator.pop(context);
       }
     }catch(e){
-      if(mounted)setState(()=>error='$e');
+      if(mounted)setState(()=>error=e is ApiException
+          ? e.message
+          : 'Unable to save changes. Please try again.');
     }finally{
       if(mounted)setState(()=>busy=false);
     }
@@ -321,7 +324,12 @@ class EntityForm extends StatefulWidget {
         decoration:InputDecoration(labelText:'${f.label}${f.required?' *':''}'),
         validator:(v){
           final value=v?.trim()??'';
-          if(f.required&&value.isEmpty)return 'Required';
+          if(f.required&&value.isEmpty)return '${f.label} is required.';
+          if((widget.kind=='facility'||widget.kind=='notice')&&
+              (f.key=='title'||f.key=='details'||f.key=='body')&&
+              value.isNotEmpty&&value.length<3){
+            return 'Enter at least 3 characters for ${f.label.toLowerCase()}.';
+          }
           if(f.number&&num.tryParse(value)==null)return 'Enter a number';
           if(f.key=='beds'&&((int.tryParse(value)??0)<1||(int.tryParse(value)??0)>100))return 'Use a whole number from 1–100';
           if(f.secret&&value.length<8)return 'Use at least 8 characters';
@@ -332,7 +340,7 @@ class EntityForm extends StatefulWidget {
         child:Semantics(liveRegion:true,
         child:Text(error!,
         style:const TextStyle(color:Colors.red,
-        fontSize:12)))),
+        fontSize:14,height:1.4)))),
         FilledButton(onPressed:busy?null:save,
         child:Text(busy?'Saving…':'Save changes'))
       ])))
