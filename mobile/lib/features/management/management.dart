@@ -460,7 +460,7 @@ Widget propertySelector(BuildContext context){
       'resident_id'
     ]==id).toList();
     return PageBody(title:'${r['name']}',
-    subtitle:'Room ${r['room']} · Bed ${r['bed']??'—'}',
+    subtitle:'Room ${r['room']} · Bed ${r['bed']??'—'} · Monthly rent ${inr(r['monthly_rent']??'0')}',
     children:[
       HeroCard(label:'Outstanding rent',
       value:inr(inv.fold<double>(0,
@@ -473,6 +473,8 @@ Widget propertySelector(BuildContext context){
         Text('${r['email']}'),
         const SizedBox(height:8),
         Text('Phone · ${r['phone']??'—'}'),
+        const SizedBox(height:8),
+        Text('Monthly rent · ${inr(r['monthly_rent']??'0')}',style:const TextStyle(fontWeight:FontWeight.w700)),
         const SizedBox(height:15),
         FilledButton(onPressed:()=>editEntity(context,
         'resident',
@@ -494,6 +496,17 @@ Widget propertySelector(BuildContext context){
             if(context.mounted)await showResidentCredentials(context,Map<String,dynamic>.from(data as Map));
           }catch(e){if(context.mounted)feedback(context,'$e');}
         }),
+      if(app.profile['role']=='owner')OutlinedButton.icon(
+        onPressed:()async{
+          final active=r['is_active']!=false;
+          if(!await ask(context,active
+            ?'Deactivate this resident account? Sign-in access will be removed; rent and document history remains.'
+            :'Reactivate this resident account?')||!context.mounted)return;
+          try{await app.mutate('/v3/residents/$id/access',method:'PATCH',body:{'active':!active});
+            if(context.mounted){feedback(context,active?'Resident deactivated':'Resident reactivated');Navigator.pop(context);}}
+          catch(e){if(context.mounted)feedback(context,'$e');}
+        },icon:Icon(r['is_active']==false?Icons.person_add_alt_1_outlined:Icons.person_off_outlined),
+          label:Text(r['is_active']==false?'Reactivate resident':'Deactivate resident')),
       const SectionTitle('Invoices'),
       for(final i in inv)Surface(child:ListTile(contentPadding:EdgeInsets.zero,
       title:Text('${i['period']} · ${inr(i['amount'])}'),
@@ -661,16 +674,21 @@ class OwnerInviteResidentPage extends StatefulWidget {
 }
 class _OwnerInviteResidentPageState extends State<OwnerInviteResidentPage> {
   final form=GlobalKey<FormState>();
-  final name=TextEditingController(),email=TextEditingController(),phone=TextEditingController();
+  final name=TextEditingController(),email=TextEditingController(),phone=TextEditingController(),rent=TextEditingController(text:'0');
   int propertyId=0,bed=0;String room='';bool busy=false;String? error;
-  @override void dispose(){name.dispose();email.dispose();phone.dispose();super.dispose();}
+  bool _propertyInitialized=false;
+  @override void didChangeDependencies(){
+    super.didChangeDependencies();
+    if(!_propertyInitialized){propertyId=AppScope.of(context).propertyId??0;_propertyInitialized=true;}
+  }
+  @override void dispose(){name.dispose();email.dispose();phone.dispose();rent.dispose();super.dispose();}
   Future<void> submit() async {
     if(!form.currentState!.validate())return;
     setState(()=>busy=true);
     final app=AppScope.of(context);
     try{
       final data=await app.mutate('/v3/residents/invite',body:{'name':name.text.trim(),'email':email.text.trim(),
-        'phone':phone.text.trim(),'property_id':propertyId,'room':room,'bed':bed});
+        'phone':phone.text.trim(),'monthly_rent':rent.text.trim(),'property_id':propertyId,'room':room,'bed':bed});
       if(mounted){await showResidentCredentials(context,Map<String,dynamic>.from(data as Map));if(mounted)Navigator.pop(context);}
     }catch(e){if(mounted)setState(()=>error='$e');}
     finally{if(mounted)setState(()=>busy=false);}
@@ -688,6 +706,10 @@ class _OwnerInviteResidentPageState extends State<OwnerInviteResidentPage> {
         TextFormField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Resident email'),validator:(v)=>(v??'').contains('@')?null:'Enter a valid email'),
         const SizedBox(height:12),
         TextFormField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'Phone (optional)')),
+        const SizedBox(height:12),
+        TextFormField(controller:rent,keyboardType:const TextInputType.numberWithOptions(decimal:true),
+          decoration:const InputDecoration(labelText:'Monthly resident rent (₹)'),
+          validator:(v){final n=num.tryParse(v?.trim()??'');return n==null||n<0?'Enter a valid non-negative rent':null;}),
         const SizedBox(height:12),
         DropdownButtonFormField<int>(isExpanded:true,initialValue:propertyId,
           decoration:const InputDecoration(labelText:'PG property'),

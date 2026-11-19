@@ -61,7 +61,7 @@ def alert(s,u,title,body,destination,user_id=None,audience='all',property_id=Non
  s.add(a)
  if property_id is not None or entity_id is not None:
   s.flush()
-  put(s,u.tenant_id,'alert_meta',a.id,{'property_id':property_id,'entity_id':entity_id})
+  put(s,u.tenant_id,'alert_meta',a.id,{'property_id':property_id,'entity_id':entity_id,'created_by':u.id})
 def audit(s,u,action,details):put(s,u.tenant_id,'audit',uuid.uuid4().hex,{'actor':u.id,'action':action,'details':details,'at':iso(now())})
 def commit(s):
  try:s.commit()
@@ -154,6 +154,7 @@ class OwnerResidentInvite(BaseModel):
  room:str=Field(default='',max_length=30)
  property_id:int=0
  bed:int=Field(default=0,ge=0)
+ monthly_rent:Decimal=Field(default=Decimal('0'),ge=0,le=10000000,max_digits=12,decimal_places=2)
 
 def issue_temporary_access(s,u,resident):
  # Password is shown only in the response; only its Argon2 hash is persisted.
@@ -179,10 +180,27 @@ def invite_resident(data:OwnerResidentInvite,u:User=Depends(current),s:Session=D
  s.add(resident);s.flush()
  temp=issue_temporary_access(s,u,resident)
  put(s,u.tenant_id,'profile',resident.id,{'phone':data.phone})
- put(s,u.tenant_id,'resident_meta',resident.id,{'property_id':data.property_id,'bed':data.bed})
+ put(s,u.tenant_id,'resident_meta',resident.id,{'property_id':data.property_id,'bed':data.bed,'monthly_rent':str(data.monthly_rent)})
  audit(s,u,'resident_invited',{'resident_id':resident.id})
  commit(s)
  return {'id':resident.id,'name':resident.name,'email':resident.email,'temporary_password':temp,'expires_in_hours':72,'must_change_password':True}
+
+class ResidentAccessChange(BaseModel):
+ active:bool
+
+@router.patch('/residents/{resident_id}/access')
+def change_resident_access(resident_id:int,data:ResidentAccessChange,u:User=Depends(current),s:Session=Depends(db)):
+ role(u,'owner')
+ resident=tenant_get(s,User,resident_id,u.tenant_id)
+ if resident.role!='resident':raise HTTPException(404,'Resident not found')
+ from platform_api import PlatformUserAccess
+ access=s.get(PlatformUserAccess,resident.id)
+ if access is None:
+  access=PlatformUserAccess(user_id=resident.id,is_active=int(data.active));s.add(access)
+ else:access.is_active=int(data.active)
+ audit(s,u,'resident_access_changed',{'resident_id':resident.id,'active':data.active})
+ commit(s)
+ return {'id':resident.id,'active':data.active,'message':'Resident account activated' if data.active else 'Resident account deactivated. History is preserved.'}
 
 @router.post('/residents/{resident_id}/reset-access')
 def reissue_resident_access(resident_id:int,u:User=Depends(current),s:Session=Depends(db)):
@@ -312,8 +330,9 @@ def property_rows(s,u):
  primary={'id':0,'name':t.name,'city':'','address':'','upi':t.upi_id,'archived':False,**meta(s,u.tenant_id,'primary_property',0)}
  return [primary]+[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='property')).all()]
 def user_rows(s,u,role_name):
+ from platform_api import PlatformUserAccess
  rows=s.scalars(select(User).where(User.tenant_id==u.tenant_id,User.role==role_name)).all()
- return [dict(id=r.id,name=r.name,email=r.email,room=r.room,**meta(s,u.tenant_id,'profile',r.id),**meta(s,u.tenant_id,'resident_meta' if role_name=='resident' else 'staff_meta',r.id)) for r in rows]
+ return [dict(id=r.id,name=r.name,email=r.email,room=r.room,**meta(s,u.tenant_id,'profile',r.id),**meta(s,u.tenant_id,'resident_meta' if role_name=='resident' else 'staff_meta',r.id),is_active=(bool(s.get(PlatformUserAccess,r.id).is_active) if s.get(PlatformUserAccess,r.id) else True)) for r in rows]
 def chat_rows(s,u,property_id=None):
  messages=s.scalars(select(ChatMessage).where(ChatMessage.tenant_id==u.tenant_id).order_by(ChatMessage.id.desc())).all();members={r.id:r for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))};names={i:r.name for i,r in members.items()};out=[]
  for m in reversed(messages):
@@ -444,7 +463,7 @@ def state(u:User=Depends(current),s:Session=Depends(db)):
  accommodation_property=next((p['name'] for p in property_rows(s,u) if p['id']==resident_property),t.name)
  from identity_api import identity_progress
  identity_onboarding=identity_progress(s,u) if u.role=='resident' else None
- return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices if visible_property(s,u,meta(s,u.tenant_id,'notice_meta',n.id).get('property_id',0))],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',f.id).get('property_id',0))],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':meal_rows(s,u),'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[],'identity_onboarding':identity_onboarding,'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,entity_id=meta(s,u.tenant_id,'alert_meta',a.id).get('entity_id'),property_id=meta(s,u.tenant_id,'alert_meta',a.id).get('property_id'),created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner) and visible_alert(s,u,a)],'payment_methods':payment_destination(s,u,resident_property if u.role=='resident' else 0),'property_payment_methods':[payment_destination(s,u,int(p['id'])) for p in property_rows(s,u) if p.get('archived')!=True] if is_owner else [],'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
+ return {'files':[{'id':f.id,'filename':f.filename,'mime':f.mime} for f in s.scalars(select(PrivateFile).where(PrivateFile.tenant_id==u.tenant_id)) if f.author_id==u.id or is_owner or u.role=='staff' and any(meta(s,u.tenant_id,'ticket_meta',t.id).get('file_id')==f.id for t in tickets)],'profile':profile_out(s,u),'properties':property_rows(s,u) if is_owner else [],'rooms':[dict(id=r.id,name=r.name,beds=r.beds,**meta(s,u.tenant_id,'room_meta',r.id)) for r in s.scalars(select(Room).where(Room.tenant_id==u.tenant_id))] if is_owner else [],'residents':user_rows(s,u,'resident') if is_owner else [],'staff':user_rows(s,u,'staff') if is_owner else [],'invoices':[invoice_out(i) for i in inv],'payments':[dict(id=p.id,invoice_id=p.invoice_id,resident_id=p.resident_id,amount=str(p.amount),reference=p.reference,status=p.status,created_at=iso(p.created_at),**payment_risk_out(s,u.tenant_id,p)) for p in pay],'complaints':[dict(id=t.id,resident_id=t.resident_id,category=t.category,description=t.description,status=t.status,assigned_to=t.assigned_to,**meta(s,u.tenant_id,'ticket_meta',t.id)) for t in tickets],'notices':[dict(id=n.id,title=n.title,body=n.body,category=n.category,status=n.status,read=n.id in notice_read,created_at=iso(n.created_at),**meta(s,u.tenant_id,'notice_meta',n.id)) for n in notices if visible_property(s,u,meta(s,u.tenant_id,'notice_meta',n.id).get('property_id',0))],'facilities':[dict(id=f.id,title=f.title,details=f.details,category=f.category,status=f.status,**meta(s,u.tenant_id,'facility_meta',f.id)) for f in facilities if visible_property(s,u,meta(s,u.tenant_id,'facility_meta',f.id).get('property_id',0))],'expenses':[dict(id=e.id,period=e.period,description=e.description,category=e.category,amount=str(e.amount),**meta(s,u.tenant_id,'expense_meta',e.id)) for e in s.scalars(select(Expense).where(Expense.tenant_id==u.tenant_id))] if is_owner else [],'bookings':[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='booking'))] if is_owner else [],'meals':meal_rows(s,u),'messages':chat_rows(s,u) if u.role!='staff' else [],'members':[],'identity_onboarding':identity_onboarding,'notifications':[dict(id=a.id,title=a.title,body=a.body,destination=a.destination,entity_id=meta(s,u.tenant_id,'alert_meta',a.id).get('entity_id'),property_id=meta(s,u.tenant_id,'alert_meta',a.id).get('property_id'),created_at=a.created_at,read=a.id in alert_read) for a in alerts if (a.user_id is None or a.user_id==u.id) and (a.audience=='all' or a.audience==u.role or a.audience=='owners' and is_owner) and visible_alert(s,u,a) and int(meta(s,u.tenant_id,'alert_meta',a.id).get('created_by',-1))!=u.id],'payment_methods':payment_destination(s,u,resident_property if u.role=='resident' else 0),'property_payment_methods':[payment_destination(s,u,int(p['id'])) for p in property_rows(s,u) if p.get('archived')!=True] if is_owner else [],'accommodation':{'property':accommodation_property,'room':u.room,**meta(s,u.tenant_id,'resident_meta',u.id)}}
 
 class PropertyInput(BaseModel):
  name:str=Field(min_length=2,max_length=120)
@@ -466,6 +485,7 @@ class PersonInput(BaseModel):
  property_id:int=0
  bed:int=Field(default=0,ge=0)
  job:str='Maintenance'
+ monthly_rent:Decimal=Field(default=Decimal('0'),ge=0,le=10000000,max_digits=12,decimal_places=2)
 class ExpenseInput(BaseModel):
  period:str=Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
  description:str=Field(min_length=2,max_length=300)
@@ -565,7 +585,7 @@ def save_entity(kind,identifier,data,u,s,creating):
   r.name=d['name'];r.email=mail;r.room=d['room'];s.add(r);s.flush();identifier=r.id
   if creating and kind=='resident':issue_temporary_access(s,u,r)
   pm=meta(s,u.tenant_id,'profile',identifier);pm['phone']=d['phone'];put(s,u.tenant_id,'profile',identifier,pm)
-  put(s,u.tenant_id,kind+'_meta',identifier,{k:d[k] for k in ('property_id','bed','job')})
+  put(s,u.tenant_id,kind+'_meta',identifier,{**meta(s,u.tenant_id,kind+'_meta',identifier),**{k:d[k] for k in ('property_id','bed','job')},**({'monthly_rent':str(d['monthly_rent'])} if kind=='resident' else {})})
  elif kind=='expense':
   vals={k:d[k] for k in ('period','description','category','amount')};r=Expense(tenant_id=u.tenant_id,**vals) if creating else tenant_get(s,Expense,identifier,u.tenant_id)
   for k,v in vals.items():setattr(r,k,v)
@@ -691,8 +711,11 @@ def community_members(property_id:int,u:User=Depends(current),s:Session=Depends(
  """Return only members assigned to a PG; no cross-property membership leakage."""
  role(u,'owner','manager','resident','staff')
  chat_access(s,u,property_id)
+ from platform_api import PlatformUserAccess
  result=[]
  for member in s.scalars(select(User).where(User.tenant_id==u.tenant_id)):
+  access=s.get(PlatformUserAccess,member.id)
+  if access is not None and not access.is_active:continue
   if member.role in ('owner','manager'):
    # Organization owner/manager may participate in each of its communities.
    result.append({'id':member.id,'name':member.name,'role':member.role,'property_id':property_id})

@@ -240,6 +240,7 @@ def _owner_counts(s, t):
     residents = s.scalars(select(User).where(User.tenant_id == t.id, User.role == 'resident')).all()
     rooms = s.scalars(select(Room).where(Room.tenant_id == t.id)).all()
     exclusions = {x.resident_id for x in s.scalars(select(ResidentBillingOverride).where(ResidentBillingOverride.resident_id.in_([r.id for r in residents]))).all()} if residents else set()
+    exclusions.update(r.id for r in residents if not _user_out(s,r)['is_active'])
     if V3_AVAILABLE:
         primary_meta = v3_meta(s, t.id, 'primary_property', 0)
         properties = [{'id': 0, 'name': primary_meta.get('name', t.name), 'address': primary_meta.get('address',''), 'active':True}]
@@ -262,7 +263,7 @@ def _owner_counts(s, t):
     unassigned_rooms = len([r for r in rooms if room_assignments.get(r.id) not in ids])
     unassigned_residents = len([r for r in residents if resident_assignments.get(r.id) not in ids])
     total_beds = sum(r.beds for r in rooms)
-    return {'properties':result, 'pg_count':len(properties), 'total_rooms':len(rooms), 'total_beds':total_beds, 'total_residents':len(residents), 'billable_residents':len(residents)-len(exclusions), 'unassigned_rooms':unassigned_rooms, 'unassigned_residents':unassigned_residents, 'occupancy_percent':round(len(residents)/total_beds*100,1) if total_beds else None, 'rooms': [{'id':r.id,'name':r.name,'beds':r.beds,'property_id':room_assignments.get(r.id)} for r in rooms], 'residents':[{'id':r.id,'name':r.name,'email':r.email,'room':r.room,'property_id':resident_assignments.get(r.id),'billable':r.id not in exclusions} for r in residents]}
+    return {'properties':result, 'pg_count':len(properties), 'total_rooms':len(rooms), 'total_beds':total_beds, 'total_residents':len(residents), 'billable_residents':len(residents)-len(exclusions), 'unassigned_rooms':unassigned_rooms, 'unassigned_residents':unassigned_residents, 'occupancy_percent':round(len(residents)/total_beds*100,1) if total_beds else None, 'rooms': [{'id':r.id,'name':r.name,'beds':r.beds,'property_id':room_assignments.get(r.id)} for r in rooms], 'residents':[{'id':r.id,'name':r.name,'email':r.email,'room':r.room,'property_id':resident_assignments.get(r.id),'monthly_rent':str(v3_meta(s,t.id,'resident_meta',r.id).get('monthly_rent','0')),'billable':r.id not in exclusions} for r in residents]}
 
 
 def _owner_out(s, t, detail=False):
@@ -341,7 +342,8 @@ def _user_out(s, u):
     tenant = s.get(Tenant, u.tenant_id)
     return {'id': u.id, 'tenant_id': u.tenant_id, 'tenant_name': tenant.name if tenant else '',
             'name': u.name, 'email': u.email, 'role': u.role, 'room': u.room,
-            'is_active': bool(access.is_active) if access else True}
+            'is_active': bool(access.is_active) if access else True,
+            'monthly_rent': (str(v3_meta(s,u.tenant_id,'resident_meta',u.id).get('monthly_rent','0')) if V3_AVAILABLE and u.role=='resident' else None)}
 
 
 @router.get('/users')
@@ -379,6 +381,26 @@ def update_platform_user(user_id: int, data: PlatformUserIn,
     s.commit()
     return _user_out(s, user)
 
+
+class ResidentRentUpdate(BaseModel):
+    monthly_rent: Decimal = Field(ge=0, le=10000000, max_digits=12, decimal_places=2)
+
+@router.put('/users/{user_id}/monthly-rent')
+def update_resident_monthly_rent(user_id: int, data: ResidentRentUpdate,
+                                 admin: AdminUser = Depends(_requires_admin), s: Session = Depends(db)):
+    user = s.get(User, user_id)
+    if not user or user.role != 'resident':
+        raise HTTPException(404, 'Resident not found')
+    if not V3_AVAILABLE:
+        raise HTTPException(503, 'Resident rent storage is unavailable')
+    from v3_api import put as v3_put
+    existing = v3_meta(s, user.tenant_id, 'resident_meta', user.id)
+    v3_put(s, user.tenant_id, 'resident_meta', user.id,
+           {**existing, 'monthly_rent': str(data.monthly_rent)})
+    _audit(s, admin, 'update_resident_monthly_rent', f'user:{user.id}/tenant:{user.tenant_id}')
+    s.commit()
+    return {'resident_id': user.id, 'monthly_rent': str(data.monthly_rent),
+            'note': 'Existing rent invoices are unchanged. New invoices remain manually issued.'}
 
 @router.get('/overview')
 def platform_overview(admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):

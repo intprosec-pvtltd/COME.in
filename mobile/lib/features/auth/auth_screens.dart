@@ -389,6 +389,7 @@ class SignInScreen extends StatefulWidget {
   final String email;
   @override State<ResetPasswordScreen> createState()=>_ResetPasswordScreenState();
 } class _ResetPasswordScreenState extends State<ResetPasswordScreen>{
+  bool showPassword=false;
   final form=GlobalKey<FormState>();
   final code=TextEditingController(),
   password=TextEditingController();
@@ -409,8 +410,8 @@ class SignInScreen extends StatefulWidget {
       validator:(v)=>RegExp(r'^\d{6}$').hasMatch(v??'')?null:'Enter the 6-digit code'),
       const SizedBox(height:15),
       TextFormField(controller:password,
-      obscureText:true,
-      decoration:const InputDecoration(labelText:'New password'),
+      obscureText:!showPassword,
+      decoration:InputDecoration(labelText:'New password',suffixIcon:IconButton(tooltip:showPassword?'Hide password':'Show password',icon:Icon(showPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showPassword=!showPassword))),
       validator:(v)=>(v??'').length<8?'Use at least 8 characters':null),
       const SizedBox(height:20),
       FilledButton(onPressed:busy?null:()async{

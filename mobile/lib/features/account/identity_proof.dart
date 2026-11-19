@@ -232,7 +232,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
       decoration: BoxDecoration(color:const Color(0xFFFFF4E5),
         borderRadius:BorderRadius.circular(12)),
       child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(tr(context,'Authenticity not verified'),
+        Text('Document review information — authenticity not independently verified',
           style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF815418))),
         const SizedBox(height:5),
         Text(flags.isEmpty ? tr(context,'No flags found') : flags.join(' • '),
@@ -241,7 +241,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         Text(tr(context,'Not a government verification'),
           style:const TextStyle(fontSize:11)),
         const SizedBox(height: 5),
-        Text('AI origin: not conclusively determined',
+        Text('PDF metadata alone cannot establish whether a document is genuine or modified.',
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
         if ((proof['review_notes'] as List? ?? []).isNotEmpty) ...[
           const SizedBox(height: 5),
@@ -339,8 +339,9 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
       if(!mounted)return;
       await showDialog<void>(context:context,builder:(ctx)=>Dialog(child:Column(
         mainAxisSize:MainAxisSize.min,children:[
+          Align(alignment:Alignment.topRight,child:IconButton(
+            tooltip:'Close photograph',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(ctx))),
           Flexible(child:InteractiveViewer(child:Image.memory(Uint8List.fromList(bytes),fit:BoxFit.contain))),
-          TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close')),
         ])));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Cannot open photograph.')));}
   }

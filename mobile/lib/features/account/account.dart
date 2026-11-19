@@ -409,6 +409,7 @@ class FirstLoginPasswordPage extends StatefulWidget {
   @override State<FirstLoginPasswordPage> createState()=>_FirstLoginPasswordPageState();
 }
 class _FirstLoginPasswordPageState extends State<FirstLoginPasswordPage> {
+  bool showTemporary=false, showNew=false, showConfirm=false;
   final form=GlobalKey<FormState>();
   final initial=TextEditingController();
   final newer=TextEditingController();
@@ -436,11 +437,11 @@ class _FirstLoginPasswordPageState extends State<FirstLoginPasswordPage> {
       const Text('Your PG owner gave you temporary access. Change that password before using COME.in. You will sign in again afterward.'),
       const SizedBox(height:25),
       Form(key:form,child:Column(children:[
-        TextFormField(controller:initial,obscureText:true,decoration:const InputDecoration(labelText:'Temporary password'),validator:(v)=>(v??'').isEmpty?'Required':null),
+        TextFormField(controller:initial,obscureText:!showTemporary,decoration:InputDecoration(labelText:'Temporary password',suffixIcon:IconButton(tooltip:showTemporary?'Hide temporary password':'Show temporary password',icon:Icon(showTemporary?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showTemporary=!showTemporary))),validator:(v)=>(v??'').isEmpty?'Required':null),
         const SizedBox(height:15),
-        TextFormField(controller:newer,obscureText:true,decoration:const InputDecoration(labelText:'New password'),validator:(v)=>(v??'').length<8?'Use at least 8 characters':null),
+        TextFormField(controller:newer,obscureText:!showNew,decoration:InputDecoration(labelText:'New password',suffixIcon:IconButton(tooltip:showNew?'Hide new password':'Show new password',icon:Icon(showNew?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showNew=!showNew))),validator:(v)=>(v??'').length<8?'Use at least 8 characters':null),
         const SizedBox(height:15),
-        TextFormField(controller:confirm,obscureText:true,decoration:const InputDecoration(labelText:'Confirm new password'),validator:(v)=>v!=newer.text?'Passwords do not match':null),
+        TextFormField(controller:confirm,obscureText:!showConfirm,decoration:InputDecoration(labelText:'Confirm new password',suffixIcon:IconButton(tooltip:showConfirm?'Hide confirmation':'Show confirmation',icon:Icon(showConfirm?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showConfirm=!showConfirm))),validator:(v)=>v!=newer.text?'Passwords do not match':null),
       ])),
       if(error!=null)Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(error!,style:const TextStyle(color:Colors.red))),
       const SizedBox(height:22),

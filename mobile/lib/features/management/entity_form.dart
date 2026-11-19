@@ -62,6 +62,7 @@ class FieldSpec {
     'Initial password',
     secret:true),
     if(kind=='resident')...const [
+      FieldSpec('monthly_rent','Monthly rent (₹)',number:true,defaultValue:'0'),
       FieldSpec('room',
       'Room number',
       required:false),
@@ -208,12 +209,11 @@ class EntityForm extends StatefulWidget {
       ]!.text))controls[
         f.key
       ]!.text=f.options!.first;
-    }property=(widget.initial['property_id'] as num?)?.toInt()??
-        (['expense','facility','notice','meal','booking','staff'].contains(widget.kind)?-1:0);
+    }property=(widget.initial['property_id'] as num?)?.toInt()??-1;
   } @override void didChangeDependencies(){
     super.didChangeDependencies();
     final selected=AppScope.of(context).propertyId;
-    if(property==-1&&selected!=null&&['expense','facility','notice','meal','booking'].contains(widget.kind)){
+    if(property==-1&&selected!=null&&['room','resident','staff','expense','facility','notice','meal','booking'].contains(widget.kind)){
       property=selected;
     }
     if(widget.kind=='expense'&&controls[
@@ -226,7 +226,7 @@ class EntityForm extends StatefulWidget {
     super.dispose();
   } Future<void> save()async{
     if(!form.currentState!.validate())return;
-    if(['expense','facility','notice','meal','booking','staff'].contains(widget.kind)&&property<0){
+    if(['room','resident','staff','expense','facility','notice','meal','booking'].contains(widget.kind)&&property<0){
       setState(()=>error='Select the PG property before saving.');
       return;
     }
@@ -331,6 +331,7 @@ class EntityForm extends StatefulWidget {
             return 'Enter at least 3 characters for ${f.label.toLowerCase()}.';
           }
           if(f.number&&num.tryParse(value)==null)return 'Enter a number';
+          if(f.key=='monthly_rent'&&(num.tryParse(value)??-1)<0)return 'Monthly rent cannot be negative';
           if(f.key=='beds'&&((int.tryParse(value)??0)<1||(int.tryParse(value)??0)>100))return 'Use a whole number from 1–100';
           if(f.secret&&value.length<8)return 'Use at least 8 characters';
           if(f.key=='email'&&!value.contains('@'))return 'Enter a valid email';

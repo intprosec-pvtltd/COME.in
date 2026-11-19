@@ -107,6 +107,11 @@ dynamic>> scopedInvoices(AppController app){
         'outstanding'
       ]))),
       detail:app.owner?'${all.length} invoices · ${app.period}':'Pay directly to your PG owner.'),
+      if(!app.owner)Surface(child:ListTile(
+        title:const Text('Agreed monthly rent'),
+        subtitle:const Text('The rent recorded for your accommodation; actual dues follow issued invoices.'),
+        trailing:Text(inr((app.data['accommodation'] as Map?)?['monthly_rent']??'0'),
+          style:const TextStyle(fontWeight:FontWeight.w700)))),
       Wrap(spacing:7,
       children:[
         for(final s in [
@@ -254,7 +259,12 @@ dynamic>> scopedInvoices(AppController app){
           'id'
         ]as int,
         child:Text('${r['name']}'))).toList(),
-        onChanged:(v)=>resident=v,
+        onChanged:(v){
+          resident=v;
+          final row=app.rows('residents').where((r)=>r['id']==v).toList();
+          if(row.isNotEmpty){final rent=amount(row.first['monthly_rent']);
+            amountInput.text=rent>0?rent.toStringAsFixed(2):'';}
+        },
         validator:(v)=>v==null?'Choose a resident':null),
         const SizedBox(height:15),
         TextFormField(controller:period,
