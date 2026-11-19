@@ -306,7 +306,11 @@ class _DashboardState extends State<Dashboard> {
       Icons.key_outlined),
       ('paymentMethods',
       'UPI & bank details',
-      Icons.account_balance_outlined)
+      Icons.account_balance_outlined),
+      if(app.profile['role']=='owner')(
+      'ownerSubscription',
+      'My subscription · ₹39',
+      Icons.receipt_long_outlined)
     ]:<(String,
     String,
     IconData)>[
