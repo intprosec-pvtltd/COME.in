@@ -49,7 +49,7 @@ function App(){
   const [profileVerification,setProfileVerification]=useState('');
   const [token,setToken]=useState(()=>sessionStorage.getItem('comein_platform_admin_token')||'');
   const [admin,setAdmin]=useState(null);
-  const [tab,setTab]=useState('Overview');
+  const [tab,setTab]=useState(()=>{const saved=sessionStorage.getItem('staysync_admin_active_tab');return [...nav.map(([name])=>name),'Admin Profile','Activity'].includes(saved)?saved:'Overview'});
   const [overview,setOverview]=useState(null);
   const [owners,setOwners]=useState([]);
   const [invoices,setInvoices]=useState([]);
@@ -82,7 +82,7 @@ function App(){
   }
   const fail=e=>{const msg=e?.message||'Unable to complete request';setError(msg);setSuccess('');toast.error(msg)};
   const notify=s=>{setSuccess(s);setError('');toast.success(s)};
-  function logout(){sessionStorage.removeItem('comein_platform_admin_token');setToken('');setAdmin(null);setOverview(null);setOwners([]);setDetail(null);setPlatformUsers([]);setProfileDraft(null)}
+  function logout(){sessionStorage.removeItem('staysync_admin_active_tab');sessionStorage.removeItem('comein_platform_admin_token');setToken('');setAdmin(null);setOverview(null);setOwners([]);setDetail(null);setPlatformUsers([]);setProfileDraft(null)}
 
   async function refresh(authToken=token){
     if(!authToken)return;
@@ -116,6 +116,7 @@ function App(){
   async function addPG(e){e.preventDefault();if(!ownerId)return;const ok=await mutate(`/owners/${ownerId}/properties`,'POST',newPG,'PG property created');if(ok)setNewPG({name:'',address:''})}
   const matchingOwners=useMemo(()=>owners.filter(o=>`${o.business_name} ${o.owners.map(x=>`${x.name} ${x.email}`).join(' ')}`.toLowerCase().includes(search.toLowerCase())),[owners,search]);
   async function setNav(value){
+    sessionStorage.setItem('staysync_admin_active_tab',value);
     setTab(value);setMobileNav(false);setError('');
     if(token&&value==='Trial Management'){try{setTrials(await request('/trials'))}catch(e){fail(e)}}
     if(token&&value==='Activity'){try{setAudit(await request('/audit'))}catch(e){fail(e)}}
@@ -181,7 +182,7 @@ function App(){
   if(!token)return <><Toaster position="top-right" toastOptions={{duration:3500}}/><div className="login-scene"><div className="login-frame"><div className="login-top"><Logo/><div className="login-emblem"><LockKeyhole size={20}/></div></div><div className="login-copy"><span className="eyebrow">INTPROSEC INTERNAL WORKSPACE</span><h1>Stay Sync Manage — Platform Control</h1><p>Manage PG owners, properties, bed capacity and subscriptions from one secure workspace.</p></div><form onSubmit={signIn} className="login-fields"><label>Administrator email<input type="email" required autoComplete="username" value={credentials.email} onChange={e=>setCredentials({...credentials,email:e.target.value})} placeholder="admin@yourcompany.com"/></label><label>Password<div className="ss-password-wrap"><input type={showPassword?'text':'password'} required autoComplete="current-password" value={credentials.password} onChange={e=>setCredentials({...credentials,password:e.target.value})} placeholder="Administrator password"/><button className="ss-password-toggle" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'} aria-pressed={showPassword}>{showPassword?'Hide':'Show'}</button></div></label>{error&&<Banner tone="error">{error}</Banner>}<button className="primary full" disabled={loading} type="submit">{loading?'Signing in…':'Sign in to platform'} <ArrowUpRight size={17}/></button></form><Attribution login/></div></div></>;
 
   return <div className="app-shell"><Toaster position="top-right" toastOptions={{duration:3500}}/>
-    <aside className={`sidebar ${mobileNav?'show':''}`}><div className="sidebar-head"><div className="sidebar-brand"><img className="sidebar-horizontal-logo" src="/branding/stay_sync_manage_sidebar_purple.png" alt="Stay Sync Manage" /></div><button className="mobile-close bare" onClick={()=>setMobileNav(false)}><X/></button></div>
+    <aside className={`sidebar ${mobileNav?'show':''}`}><div className="sidebar-head"><div className="sidebar-brand"><button type="button" onClick={()=>setNav("Overview")} aria-label="Go to Overview" title="Go to Overview" style={{border:0,background:"transparent",padding:0,cursor:"pointer",display:"block",width:"100%"}}><img className="sidebar-horizontal-logo" src="/branding/stay_sync_manage_sidebar_purple.png" alt="Stay Sync Manage" /></button></div><button className="mobile-close bare" onClick={()=>setMobileNav(false)}><X/></button></div>
       <nav>{nav.map(([name,Icon])=><button key={name} className={`nav-item ${tab===name?'active':''}`} onClick={()=>setNav(name)}><Icon size={19}/><span>{name}</span></button>)}</nav>
       <div className="side-bottom"><div className="sidebar-account-row"><button type="button" className={`admin-chip admin-profile-trigger ${tab==='Admin Profile'?'selected':''}`} onClick={()=>setNav('Admin Profile')} title="Open administrator profile" aria-label="Open administrator profile"><div className="avatar">{(admin?.name||'A')[0].toUpperCase()}</div><div className="admin-meta"><strong>{admin?.name||'Administrator'}</strong><small>{admin?.email||'Privileged access'}</small></div></button><button type="button" className="sidebar-signout" onClick={logout} title="Sign out of platform administrator account" aria-label="Sign out"><LogOut size={16}/><span>Sign out</span></button></div><Attribution/></div>
     </aside>
