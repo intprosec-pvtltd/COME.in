@@ -15,7 +15,7 @@ def test_resident_proof_is_tenant_scoped(monkeypatch):
         monkeypatch.setenv('DEMO_SEED', 'false')
         # Preserve modules imported at pytest collection time (e.g. test_v3.py).
         # This test temporarily imports a separate FastAPI/SQLite app.
-        _isolation_names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api')
+        _isolation_names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api', 'account_deletion', 'push_notifications')
         _prior_modules = {name: sys.modules.get(name) for name in _isolation_names}
         for name in _isolation_names:
             sys.modules.pop(name, None)
@@ -91,6 +91,21 @@ def test_resident_proof_is_tenant_scoped(monkeypatch):
             assert newest['status']=='pending'
             assert client.post(f'/api/identity/proofs/{sid}/review',headers=headers(2),
                 json={'decision':'approved'}).status_code==409
+            # Cross-PG deletion is hidden, and document-linked resident erasure is blocked.
+            from platform_api import PlatformUserAccess
+            with SessionLocal() as s:
+                s.add(PlatformUserAccess(user_id=identities[1][0], is_active=0))
+                s.commit()
+            rid = identities[1][0]
+            assert client.get(f'/api/v3/residents/{rid}/deletion-review',headers=headers(2)).status_code==404
+            preview = client.get(f'/api/v3/residents/{rid}/deletion-review',headers=headers(0))
+            assert preview.status_code==200, preview.text
+            assert preview.json()['eligible'] is False
+            denied = client.request('DELETE',f'/api/v3/residents/{rid}',headers=headers(0),
+                                    json={'confirm_email':'resident-a@test.invalid'})
+            assert denied.status_code==409,denied.text
+            assert client.get(f'/api/identity/proofs/{fid}/file',headers=headers(0)).content==payload
+
         finally:
             client.close()
             main.engine.dispose()

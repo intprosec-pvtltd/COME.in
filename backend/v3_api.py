@@ -59,6 +59,10 @@ def owner(u):role(u,'owner','manager')
 def alert(s,u,title,body,destination,user_id=None,audience='all',property_id=None,entity_id=None):
  a=Alert(tenant_id=u.tenant_id,user_id=user_id,audience=audience,title=title,body=body[:1000],destination=destination)
  s.add(a)
+ s.flush()
+ if os.environ.get('PUSH_ENABLED') == '1':
+  from push_notifications import PushJob
+  s.add(PushJob(alert_id=a.id))
  if property_id is not None or entity_id is not None:
   s.flush()
   put(s,u.tenant_id,'alert_meta',a.id,{'property_id':property_id,'entity_id':entity_id,'created_by':u.id})

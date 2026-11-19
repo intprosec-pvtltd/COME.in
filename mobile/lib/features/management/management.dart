@@ -507,6 +507,37 @@ Widget propertySelector(BuildContext context){
           catch(e){if(context.mounted)feedback(context,'$e');}
         },icon:Icon(r['is_active']==false?Icons.person_add_alt_1_outlined:Icons.person_off_outlined),
           label:Text(r['is_active']==false?'Reactivate resident':'Deactivate resident')),
+      if(app.profile['role']=='owner' && r['is_active']==false)
+        OutlinedButton.icon(
+          icon:const Icon(Icons.delete_forever_outlined),
+          label:const Text('Delete permanently (eligible accounts only)'),
+          onPressed:()async{
+            final email='${r['email'] ?? ''}';
+            try {
+              final review=Map<String,dynamic>.from(await app.api.request('/v3/residents/$id/deletion-review') as Map);
+              if(review['eligible']!=true){
+                if(context.mounted)feedback(context,'This resident has linked financial, document or activity records. Keep the account deactivated.');
+                return;
+              }
+              if(!context.mounted)return;
+              final field=TextEditingController();
+              final entered=await showDialog<String>(context:context,builder:(dialogContext)=>AlertDialog(
+                title:const Text('Permanently delete resident?'),
+                content:Column(mainAxisSize:MainAxisSize.min,children:[
+                  const Text('This cannot be undone. Type the exact resident email to confirm:'),
+                  const SizedBox(height:10),Text(email,style:const TextStyle(fontWeight:FontWeight.w700)),
+                  TextField(controller:field,autocorrect:false,keyboardType:TextInputType.emailAddress),
+                ]),
+                actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
+                  TextButton(onPressed:()=>Navigator.pop(dialogContext,field.text.trim()),child:const Text('Delete permanently'))],
+              ));
+              field.dispose();
+              if(entered!=email || !context.mounted)return;
+              await app.mutate('/v3/residents/$id',method:'DELETE',body:{'confirm_email':entered});
+              if(context.mounted){feedback(context,'Resident deleted');Navigator.pop(context);}
+            } catch(e){if(context.mounted)feedback(context,'Deletion not permitted: $e');}
+          },
+        ),
       const SectionTitle('Invoices'),
       for(final i in inv)Surface(child:ListTile(contentPadding:EdgeInsets.zero,
       title:Text('${i['period']} · ${inr(i['amount'])}'),

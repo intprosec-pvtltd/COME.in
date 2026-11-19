@@ -11,3 +11,6 @@ python-multipart>=0.0.20,<1
 
 # V31 visually similar document detection (CPU, no cloud AI API)
 Pillow>=11.0,<13
+
+# Optional; required only when PUSH_ENABLED=1.
+firebase-admin>=6.5,<8

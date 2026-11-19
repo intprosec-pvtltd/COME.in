@@ -264,6 +264,19 @@ from platform_api import router as platform_router, install_schema as install_pl
 install_platform_schema()
 app.include_router(platform_router)
 
+# Guarded account erasure API (admin + PG-owner authorization).
+from account_deletion import router as deletion_router
+app.include_router(deletion_router)
+
+from push_notifications import router as push_router, start_push_worker
+app.include_router(push_router)
+Base.metadata.create_all(engine)
+
+@app.on_event('startup')
+def start_staysync_notifications():
+    start_push_worker()
+
+
 
 # Resident ID proof (manual review; DigiLocker disabled).
 from identity_api import router as identity_router

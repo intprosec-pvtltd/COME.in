@@ -1,3 +1,4 @@
+import 'core/push_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app/controller.dart';
@@ -6,8 +7,9 @@ import 'core/app_theme.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/account/account.dart';
 import 'features/account/identity_proof.dart';
-void main(){
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await StaySyncPush.initialize();
   runApp(const PGApp());
 } class PGApp extends StatefulWidget {
   const PGApp({
@@ -22,7 +24,17 @@ void main(){
     super.initState();
     controller=widget.controller??AppController();
     if(widget.controller==null)controller.initialize();
-  } @override void dispose(){
+    controller.addListener(_onStateChanged);
+    _onStateChanged();
+  }
+  void _onStateChanged(){
+    if(controller.signedIn && controller.api.token!=null){
+      final id='${controller.profile['id'] ?? ''}';
+      StaySyncPush.register(controller.api,id);
+    }
+  }
+  @override void dispose(){
+    controller.removeListener(_onStateChanged);
     if(widget.controller==null)controller.dispose();
     super.dispose();
   } @override Widget build(BuildContext context)=>AppScope(controller:controller,
