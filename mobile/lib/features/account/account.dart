@@ -1,4 +1,5 @@
 import '../../core/localization.dart';
+import '../../core/display_photo.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../app/router.dart';
@@ -15,7 +16,7 @@ class AccountPage extends StatelessWidget {
     subtitle:'Manage your account and settings.',
     children:[
       Surface(child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const OfficialBrand(width:58,iconOnly:true),
+        DisplayPhotoWidget(kind:'user', id:(p['id'] as num).toInt(), revision:(p['photo_revision'] as num?)?.toInt()??0, size:58),
         const SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text('${p['name']}',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:17)),
@@ -93,6 +94,8 @@ class AccountPage extends StatelessWidget {
   children:[
     Surface(child:Form(key:form,
     child:Column(children:[
+      DisplayPhotoWidget(kind:'user', id:(AppScope.of(context).profile['id'] as num).toInt(), revision:(AppScope.of(context).profile['photo_revision'] as num?)?.toInt()??0, editable:true, size:96),
+      const SizedBox(height:14),
       TextFormField(controller:name,
       decoration:const InputDecoration(labelText:'Full name'),
       validator:(v)=>(v??'').trim().length<2?'Use at least 2 characters':null),

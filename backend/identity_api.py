@@ -267,3 +267,102 @@ def identity_progress(s: Session, u: User):
         'photo_submitted':photo is not None and photo.status!='rejected',
         'proof_submitted':proof is not None and proof.status!='rejected',
         'needs_submission':required and (photo is None or photo.status=='rejected' or proof is None or proof.status=='rejected')}
+
+
+# Display photographs are separate from manually reviewed identity portraits.
+# PostgreSQL BLOB storage survives stateless service restarts; no public file URLs.
+class DisplayPhoto(Base):
+    __tablename__ = 'staysync_display_photos'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey('tenants.id'), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # user | property
+    subject_id: Mapped[int] = mapped_column(Integer)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    mime: Mapped[str] = mapped_column(String(30), default='image/jpeg')
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (__import__('sqlalchemy').UniqueConstraint('tenant_id', 'kind', 'subject_id', name='uq_staysync_display_photo'),)
+
+
+def display_photo(s, tenant_id, kind, identifier):
+    return s.scalar(select(DisplayPhoto).where(
+        DisplayPhoto.tenant_id == tenant_id,
+        DisplayPhoto.kind == kind, DisplayPhoto.subject_id == identifier))
+
+
+def photo_revision(s, tenant_id, kind, identifier):
+    item = display_photo(s, tenant_id, kind, identifier)
+    return item.revision if item else 0
+
+
+def _photo_target(s, u, kind, identifier, write=False):
+    if kind == 'user':
+        subject = s.scalar(select(User).where(User.id == identifier, User.tenant_id == u.tenant_id))
+        if not subject: raise HTTPException(404, 'Profile not found')
+        if write and identifier != u.id: raise HTTPException(403, 'Only your own profile photo can be changed')
+        if identifier != u.id and (u.role not in ('owner', 'manager') or subject.role != 'resident'):
+            raise HTTPException(403, 'Profile photo access denied')
+    elif kind == 'property':
+        from v3_api import property_exists, visible_property
+        if identifier < 0: raise HTTPException(404, 'Property not found')
+        property_exists(s, u, identifier)
+        if write and u.role not in ('owner', 'manager'):
+            raise HTTPException(403, 'Only PG administrators can change property photos')
+        if not visible_property(s, u, identifier):
+            raise HTTPException(403, 'Property photo access denied')
+        if u.role == 'staff': raise HTTPException(403, 'Property photo access denied')
+    else:
+        raise HTTPException(404, 'Photo type not found')
+
+
+@router.get('/display-photos/{kind}/{identifier}')
+def get_display_photo(kind: str, identifier: int, u: User = Depends(current), s: Session = Depends(db)):
+    _photo_target(s, u, kind, identifier)
+    item = display_photo(s, u.tenant_id, kind, identifier)
+    if not item: raise HTTPException(404, 'No photo uploaded')
+    return Response(item.content, media_type=item.mime, headers={
+        'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@router.post('/display-photos/{kind}/{identifier}')
+async def save_display_photo(kind: str, identifier: int, file: UploadFile = File(...),
+                             u: User = Depends(current), s: Session = Depends(db)):
+    _photo_target(s, u, kind, identifier, write=True)
+    data = await file.read(4 * 1024 * 1024 + 1)
+    if not data or len(data) > 4 * 1024 * 1024:
+        raise HTTPException(413, 'Choose a photo smaller than 4 MB')
+    # Decode content; do not trust the extension, claimed MIME or EXIF.
+    from PIL import Image, UnidentifiedImageError
+    from io import BytesIO
+    try:
+        with Image.open(BytesIO(data)) as img:
+            if img.format not in ('JPEG', 'PNG'):
+                raise HTTPException(415, 'Use a JPG or PNG image')
+            if img.width * img.height > 20_000_000:
+                raise HTTPException(413, 'Image dimensions are too large')
+            img.thumbnail((1024, 1024))
+            img = img.convert('RGB')
+            result = BytesIO()
+            img.save(result, format='JPEG', quality=82, optimize=True)
+            clean_bytes = result.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        raise HTTPException(415, 'Choose a valid JPG or PNG photo')
+    # Serialize updates to one user/tenant before altering its single photo.
+    s.scalar(select(User).where(User.id == u.id).with_for_update())
+    item = display_photo(s, u.tenant_id, kind, identifier)
+    if item:
+        item.content = clean_bytes
+        item.revision += 1
+    else:
+        item = DisplayPhoto(tenant_id=u.tenant_id, kind=kind, subject_id=identifier,
+                            content=clean_bytes, revision=1)
+        s.add(item)
+    s.commit()
+    return {'ok': True, 'revision': item.revision}
+
+
+@router.delete('/display-photos/{kind}/{identifier}')
+def delete_display_photo(kind: str, identifier: int, u: User = Depends(current), s: Session = Depends(db)):
+    _photo_target(s, u, kind, identifier, write=True)
+    item = display_photo(s, u.tenant_id, kind, identifier)
+    if item: s.delete(item); s.commit()
+    return {'ok': True}

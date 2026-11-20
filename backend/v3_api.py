@@ -102,8 +102,9 @@ def security_check(u,payload,authorization,session):
  if payload.get('iat',0)<before:raise HTTPException(401,'Password changed. Sign in again.')
 
 def profile_out(s,u):
+ from identity_api import photo_revision
  t=s.get(Tenant,u.tenant_id);prefs=meta(s,u.tenant_id,'profile',u.id)
- return {'id':u.id,'name':u.name,'email':u.email,'role':u.role,'room':u.room,'phone':prefs.get('phone',''),'preferences':prefs,'must_change_password':bool(meta(s,u.tenant_id,'onboarding',u.id).get('must_change',False)),'tenant':{'id':t.id,'name':t.name}}
+ return {'id':u.id,'name':u.name,'email':u.email,'role':u.role,'room':u.room,'phone':prefs.get('phone',''),'photo_revision':photo_revision(s,u.tenant_id,'user',u.id),'preferences':prefs,'must_change_password':bool(meta(s,u.tenant_id,'onboarding',u.id).get('must_change',False)),'tenant':{'id':t.id,'name':t.name}}
 @router.get('/profile')
 def profile(u:User=Depends(current),s:Session=Depends(db)):return profile_out(s,u)
 @router.patch('/profile')
@@ -330,13 +331,16 @@ def joining_code(property_id:int=0,u:User=Depends(current),s:Session=Depends(db)
 
 
 def property_rows(s,u):
+ from identity_api import photo_revision
  t=s.get(Tenant,u.tenant_id)
  primary={'id':0,'name':t.name,'city':'','address':'','upi':t.upi_id,'archived':False,**meta(s,u.tenant_id,'primary_property',0)}
- return [primary]+[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='property')).all()]
+ rows=[primary]+[dict(d.payload,id=int(d.key)) for d in s.scalars(select(Document).where(Document.tenant_id==u.tenant_id,Document.kind=='property')).all()]
+ return [dict(p,photo_revision=photo_revision(s,u.tenant_id,'property',p['id'])) for p in rows]
 def user_rows(s,u,role_name):
+ from identity_api import photo_revision
  from platform_api import PlatformUserAccess
  rows=s.scalars(select(User).where(User.tenant_id==u.tenant_id,User.role==role_name)).all()
- return [dict(id=r.id,name=r.name,email=r.email,room=r.room,**meta(s,u.tenant_id,'profile',r.id),**meta(s,u.tenant_id,'resident_meta' if role_name=='resident' else 'staff_meta',r.id),is_active=(bool(s.get(PlatformUserAccess,r.id).is_active) if s.get(PlatformUserAccess,r.id) else True)) for r in rows]
+ return [dict(id=r.id,name=r.name,email=r.email,room=r.room,photo_revision=photo_revision(s,u.tenant_id,'user',r.id),**meta(s,u.tenant_id,'profile',r.id),**meta(s,u.tenant_id,'resident_meta' if role_name=='resident' else 'staff_meta',r.id),is_active=(bool(s.get(PlatformUserAccess,r.id).is_active) if s.get(PlatformUserAccess,r.id) else True)) for r in rows]
 def chat_rows(s,u,property_id=None):
  messages=s.scalars(select(ChatMessage).where(ChatMessage.tenant_id==u.tenant_id).order_by(ChatMessage.id.desc())).all();members={r.id:r for r in s.scalars(select(User).where(User.tenant_id==u.tenant_id))};names={i:r.name for i,r in members.items()};out=[]
  for m in reversed(messages):

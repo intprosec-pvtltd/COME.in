@@ -477,3 +477,7 @@ body,.app-shell { background:linear-gradient(135deg,#fdf9ff 0%,#fff8fd 60%,#fff5
 .ss-admin-password input { width:100%; margin-top:0; padding-right:84px; }
 .ss-admin-password .ss-password-toggle { position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#602582; padding:8px 10px; font-weight:700; font-size:13px; cursor:pointer; }
 .ss-admin-password .ss-password-toggle:focus-visible { outline:2px solid #7c3aed; border-radius:8px; }
+
+.ss-private-photo{object-fit:cover;flex-shrink:0;border:1px solid var(--border,#ddd)}
+.ss-private-photo-placeholder{display:inline-flex;align-items:center;justify-content:center;background:#f0ebf4;flex-shrink:0;font-size:22px}
+.ss-owner-photo{display:flex;gap:10px;align-items:center;margin:12px 0;font-size:13px}

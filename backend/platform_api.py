@@ -654,3 +654,20 @@ def resident_verification_overview(admin: AdminUser = Depends(_requires_admin), 
             'identity_status': proof.status if proof else 'not_submitted',
         })
     return result
+
+
+@router.get('/display-photos/{tenant_id}/{kind}/{identifier}')
+def admin_display_photo(tenant_id:int,kind:str,identifier:int,
+                        admin:AdminUser=Depends(_requires_admin),s:Session=Depends(db)):
+    from identity_api import display_photo
+    from fastapi import Response
+    if kind not in ('user','property') or not s.get(Tenant,tenant_id):
+        raise HTTPException(404,'Photo not found')
+    if kind=='user' and not s.scalar(select(User).where(User.id==identifier,User.tenant_id==tenant_id)):
+        raise HTTPException(404,'Photo not found')
+    if kind=='property' and identifier != 0:
+        if not V3_AVAILABLE or not s.scalar(select(V3Document).where(V3Document.tenant_id==tenant_id,V3Document.kind=='property',V3Document.key==str(identifier))):
+            raise HTTPException(404,'Photo not found')
+    item=display_photo(s,tenant_id,kind,identifier)
+    if not item:raise HTTPException(404,'Photo not found')
+    return Response(item.content,media_type=item.mime,headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})

@@ -1,3 +1,4 @@
+import '../../core/display_photo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -46,9 +47,7 @@ Widget propertySelector(BuildContext context){
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
         Row(children:[
-          const Icon(Icons.apartment_rounded,
-          color:lavender,
-          size:38),
+          DisplayPhotoWidget(kind:'property', id:(p['id'] as num).toInt(), revision:(p['photo_revision'] as num?)?.toInt()??0, size:58),
           const SizedBox(width:12),
           Expanded(child:Text('${p['name']}',
           style:const TextStyle(fontWeight:FontWeight.w800,
@@ -94,6 +93,7 @@ Widget propertySelector(BuildContext context){
     return PageBody(title:'${p['name']}',
     subtitle:'${p['address']}',
     children:[
+      Surface(child:DisplayPhotoWidget(kind:'property', id:id, revision:(p['photo_revision'] as num?)?.toInt()??0, editable:true, size:160)),
       HeroCard(label:'Property occupancy',
       value:'${residents.length} residents',
       detail:'${rooms.length} rooms · ${rooms.fold<int>(0,(s,r)=>s+(r['beds']as int))} beds'),
@@ -418,7 +418,7 @@ Widget propertySelector(BuildContext context){
       for(final r in residents)Surface(onTap:()=>openPage(context,
       'residentDetail',id:r['id'] as int),
       child:Row(children:[
-        const Icon(Icons.person_outline_rounded,color:plum,size:32),
+        DisplayPhotoWidget(kind:'user', id:(r['id'] as num).toInt(), revision:(r['photo_revision'] as num?)?.toInt()??0, size:48),
         const SizedBox(width:14),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text('${r['name']}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
@@ -462,6 +462,7 @@ Widget propertySelector(BuildContext context){
     return PageBody(title:'${r['name']}',
     subtitle:'Room ${r['room']} · Bed ${r['bed']??'—'} · Monthly rent ${inr(r['monthly_rent']??'0')}',
     children:[
+      DisplayPhotoWidget(kind:'user', id:id, revision:(r['photo_revision'] as num?)?.toInt()??0, size:100),
       HeroCard(label:'Outstanding rent',
       value:inr(inv.fold<double>(0,
       (s,
