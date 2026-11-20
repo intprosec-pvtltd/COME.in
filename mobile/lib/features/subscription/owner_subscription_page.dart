@@ -57,14 +57,14 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
       await call('/me/invoice/$period',method:'POST');
       await load();
     }catch(e){if(mounted)setState(()=>error=e.toString().contains('Existing legacy invoice')
-        ? 'An invoice already exists for this month. A second bill is blocked. Ask your platform administrator to reconcile the existing invoice.'
+        ? 'This month’s invoice is already available. Refresh to view it.'
         : e.toString());}
     finally{if(mounted)setState(()=>busy=false);}
   }
 
   Future<void> submit(String invoiceId) async {
     final utr=utrController.text.trim();
-    if(proof==null||utr.length<6){setState(()=>error='Enter a valid UTR and select a payment screenshot');return;}
+    if(proof==null||utr.length<6){setState(()=>error='Enter your transaction reference and attach a screenshot');return;}
     setState(()=>busy=true);
     try{
       final req=http.MultipartRequest('POST',Uri.parse('$root/me/payments'));
@@ -86,25 +86,88 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
 
   String money(dynamic cents){final v=(num.tryParse('$cents')??0)/100;return '₹${v.toStringAsFixed(2)}';}
   Widget panel(Widget child)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xffece2f0))),child:Padding(padding:const EdgeInsets.all(18),child:child));
+  String statusText(dynamic value) {
+    switch ('$value'.toLowerCase()) {
+      case 'paid': return 'Paid';
+      case 'unpaid': return 'Payment due';
+      case 'pending': return 'Pending';
+      case 'rejected': return 'Rejected';
+      case 'approved': return 'Approved';
+      default: return '$value'.replaceAll('_', ' ');
+    }
+  }
+
+  Widget invoiceCard(Map<String,dynamic> i, List<dynamic> payments,
+      Map<String,dynamic>? qr) {
+    final pending=payments.any((p)=>p['invoice_id']==i['id']&&p['status']=='pending');
+    final paid='${i['status']}'.toLowerCase()=='paid';
+    final owners=(i['owners'] as num?)?.toInt()??0;
+    return panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[
+        Expanded(child:Text('${i['period']}',style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold))),
+        Chip(label:Text(statusText(i['status']))),
+      ]),
+      const SizedBox(height:8),
+      Text(money(i['amount_cents']),style:const TextStyle(fontSize:27,fontWeight:FontWeight.w800)),
+      if(owners>0)ExpansionTile(
+        tilePadding:EdgeInsets.zero,childrenPadding:EdgeInsets.zero,
+        title:const Text('Bill details',style:TextStyle(fontSize:13)),
+        children:[
+          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+            const Text('Subscription'),Text(money(i['subtotal_cents']??0))]),
+          const SizedBox(height:4),
+          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+            const Text('GST'),Text(money(i['gst_cents']??0))]),
+          const SizedBox(height:8),
+        ],
+      ),
+      if(!paid)...[
+        const Divider(height:24),
+        if(pending)const Text('Payment submitted. Awaiting confirmation.'),
+        if(!pending&&(qr?['enabled']==1||qr?['enabled']==true))...[
+          const Text('Pay using the details below',style:TextStyle(fontWeight:FontWeight.w600)),
+          const SizedBox(height:8),
+          if('${qr?['beneficiary']??''}'.trim().isNotEmpty)
+            Text('Name: ${qr?['beneficiary']}'),
+          if('${qr?['upi_id']??''}'.trim().isNotEmpty)
+            SelectableText('UPI: ${qr?['upi_id']}'),
+          const SizedBox(height:12),
+          Center(child:Image.network('$root/payment-qr',width:190,height:190,
+            fit:BoxFit.contain,headers:headers,
+            errorBuilder:(c,e,s)=>const Text('Payment QR unavailable. Please refresh.'))),
+          const SizedBox(height:12),
+          TextField(controller:utrController,maxLength:64,
+            decoration:const InputDecoration(labelText:'Transaction reference (UTR)',border:OutlineInputBorder())),
+          TextButton.icon(onPressed:busy?null:() async {
+            final result=await _picker.pickImage(source:ImageSource.gallery,imageQuality:85);
+            if(mounted)setState(()=>proof=result);
+          },icon:const Icon(Icons.upload_file),label:Text(proof?.name??'Attach payment screenshot')),
+          const SizedBox(height:6),
+          SizedBox(width:double.infinity,child:FilledButton(
+            onPressed:busy?null:()=>submit(i['id'] as String),
+            child:const Text('Submit payment'))),
+        ]else if(!pending)const Text('Payment details unavailable. Contact support.'),
+      ],
+    ]));
+  }
+
   @override
   Widget build(BuildContext context){
     final inv=(payload?['invoices'] as List<dynamic>?)??[];
     final payments=(payload?['payments'] as List<dynamic>?)??[];
     final qr=payload?['qr'] as Map<String,dynamic>?;
     final legacy=payload?['legacy_invoice'] as Map<String,dynamic>?;
-    final residents=(payload?['billable_residents'] as num?)?.toInt()??0;
     final current=DateTime.now();
     final period='${current.year}-${current.month.toString().padLeft(2,'0')}';
-    final thisMonth=inv.where((i)=>i['period']==period).toList();
+    final hasCurrentInvoice=inv.any((i)=>i['period']==period);
     final legacyThisMonth=legacy!=null&&legacy['period']==period;
-    final owners=(payload?['billable_owners'] as num?)?.toInt()??1;
     final estimate=payload?['estimate'] as Map<String,dynamic>?;
-    final monthly=(((estimate?['amount_cents'] as num?)?.toInt()??0)/100).toStringAsFixed(2);
+    final total=money(estimate?['amount_cents']??0);
+
     return Scaffold(
       backgroundColor:const Color(0xfffaf6fc),
       appBar:AppBar(title:const Text('My subscription')),
-      body:RefreshIndicator(
-        onRefresh:load,
+      body:RefreshIndicator(onRefresh:load,
         child:ListView(padding:const EdgeInsets.all(16),children:[
           if(error!=null)panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(error!,style:const TextStyle(color:Colors.red)),
@@ -114,93 +177,72 @@ class _OwnerSubscriptionPageState extends State<OwnerSubscriptionPage> {
             padding:const EdgeInsets.all(22),
             decoration:BoxDecoration(
               gradient:const LinearGradient(colors:[Color(0xff3c224e),Color(0xff75518d)]),
-              borderRadius:BorderRadius.circular(22),
-            ),
+              borderRadius:BorderRadius.circular(22)),
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              const Text('ONE SIMPLE PLAN',style:TextStyle(color:Color(0xffe7d9ed),fontSize:12,fontWeight:FontWeight.bold)),
-              const SizedBox(height:12),
-              const Text('₹39',style:TextStyle(color:Colors.white,fontSize:44,fontWeight:FontWeight.w900)),
-              const Text('per resident or owner / month, plus GST',style:TextStyle(color:Colors.white,fontSize:15)),
+              const Text('MONTHLY PLAN',style:TextStyle(color:Color(0xffe7d9ed),fontSize:12,fontWeight:FontWeight.bold)),
+              const SizedBox(height:8),
+              const Text('₹39 / person',style:TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w800)),
+              const Text('per month + GST',style:TextStyle(color:Color(0xffe7d9ed),fontSize:13)),
               const SizedBox(height:20),
-              Text('$residents residents + $owners owners = ${residents+owners} billable users',style:const TextStyle(color:Colors.white)),
-              Text('Subtotal: ${money(estimate?['subtotal_cents']??0)} · GST (18%): ${money(estimate?['gst_cents']??0)}',style:const TextStyle(color:Colors.white)),
-              const SizedBox(height:6),
-              Text('Estimated monthly total incl. GST: ₹$monthly',style:const TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w800)),
-              const SizedBox(height:6),
-              const Text('Beds are not billed. Previously issued invoices retain their original amounts.',style:TextStyle(color:Color(0xffe7d9ed),fontSize:11)),
+              const Text('Estimated monthly total',style:TextStyle(color:Colors.white70,fontSize:13)),
+              Text(total,style:const TextStyle(color:Colors.white,fontSize:32,fontWeight:FontWeight.w900)),
+              const Text('Including GST',style:TextStyle(color:Color(0xffe7d9ed),fontSize:12)),
+              if(estimate!=null)Theme(
+                data:Theme.of(context).copyWith(dividerColor:Colors.transparent),
+                child:ExpansionTile(
+                  tilePadding:EdgeInsets.zero,childrenPadding:EdgeInsets.zero,
+                  title:const Text('Price details',style:TextStyle(color:Colors.white,fontSize:13)),
+                  iconColor:Colors.white,collapsedIconColor:Colors.white70,
+                  children:[
+                    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+                      const Text('Subscription',style:TextStyle(color:Colors.white70)),
+                      Text(money(estimate['subtotal_cents']??0),style:const TextStyle(color:Colors.white))]),
+                    const SizedBox(height:5),
+                    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+                      const Text('GST',style:TextStyle(color:Colors.white70)),
+                      Text(money(estimate['gst_cents']??0),style:const TextStyle(color:Colors.white))]),
+                  ],
+                ),
+              ),
             ]),
           ),
-          const SizedBox(height:14),
-          panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('This month’s invoice',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
+          const SizedBox(height:20),
+          Row(children:[
+            const Expanded(child:Text('Invoices',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold))),
+            IconButton(tooltip:'Refresh',onPressed:busy?null:load,icon:const Icon(Icons.refresh)),
+          ]),
+          const SizedBox(height:8),
+          if(!hasCurrentInvoice&&!legacyThisMonth)
+            panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              const Text('No invoice for this month yet.'),
+              const SizedBox(height:10),
+              FilledButton(onPressed:busy||payload==null?null:issueCurrentInvoice,
+                child:const Text('View current bill')),
+            ])),
+          if(legacyThisMonth)panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(period,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:17)),
+            const SizedBox(height:6),
+            Text(money(legacy['amount_cents']),style:const TextStyle(fontSize:27,fontWeight:FontWeight.bold)),
+            const SizedBox(height:4),
+            Text(statusText(legacy['status'])),
             const SizedBox(height:8),
-            Text('Billing month: $period'),
-            const SizedBox(height:10),
-            if(thisMonth.isNotEmpty)Text('Invoice ${thisMonth.first['status']} · ${money(thisMonth.first['amount_cents'])}',style:const TextStyle(fontWeight:FontWeight.bold)),
-            if(legacyThisMonth)...[
-              Text('Previously issued invoice #${legacy['id']} · ${legacy['status']}',
-                  style:const TextStyle(fontWeight:FontWeight.bold)),
-              Text('Original amount: ${money(legacy['amount_cents'])}'),
-              const SizedBox(height:6),
-              const Text('This invoice was issued at the previous price and keeps its original amount. The ₹39 plan applies to new eligible invoices. Contact platform support to settle this invoice.',
-                  style:TextStyle(fontSize:13)),
-            ],
-            const SizedBox(height:10),
-            if(!legacyThisMonth)FilledButton.icon(
-              onPressed:busy||payload==null?null:issueCurrentInvoice,
-              icon:const Icon(Icons.receipt_long_outlined),
-              label:Text(thisMonth.isEmpty?'Generate / view current bill':'Refresh current bill'),
-            ),
+            const Text('For payment assistance, contact support.'),
           ])),
-          const SizedBox(height:14),
-          for(final item in inv)Builder(builder:(context){
-            final i=Map<String,dynamic>.from(item as Map);
-            final pending=payments.any((p)=>p['invoice_id']==i['id']&&p['status']=='pending');
-            return panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Row(children:[
-                Expanded(child:Text('Invoice · ${i['period']}',style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold))),
-                Chip(label:Text('${i['status']}'.toUpperCase())),
-              ]),
-              const SizedBox(height:5),
-              Text('Residents: ${i['residents']} · Owners: ${i['owners']??0}'),
-              if((i['owners']??0) != 0) Text('Subtotal: ${money(i['subtotal_cents'])} · GST: ${money(i['gst_cents'])}'),
-              Text('Amount: ${money(i['amount_cents'])}',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
-              if(i['status']!='paid') ...[
-                const Divider(height:25),
-                if(pending)const Text('Your payment is awaiting administrator bank verification. You cannot submit a duplicate proof for this invoice.'),
-                if(!pending&&(qr?['enabled']==1||qr?['enabled']==true)) ...[
-                  const Text('Pay only to the verified account:',style:TextStyle(fontWeight:FontWeight.w600)),
-                  Text('Beneficiary: ${qr?['beneficiary']??''}'),
-                  SelectableText('UPI: ${qr?['upi_id']??''}'),
-                  const SizedBox(height:12),
-                  Center(child:Image.network('$root/payment-qr',width:210,height:210,fit:BoxFit.contain,headers:headers,
-                    errorBuilder:(c,e,s)=>const Text('QR unavailable. Refresh or contact the administrator.'))),
-                  const SizedBox(height:14),
-                  TextField(controller:utrController,maxLength:64,decoration:const InputDecoration(labelText:'UTR / bank transaction reference',border:OutlineInputBorder())),
-                  TextButton.icon(onPressed:busy?null:() async {
-                    final result=await _picker.pickImage(source:ImageSource.gallery,imageQuality:85);
-                    if(mounted)setState(()=>proof=result);
-                  },icon:const Icon(Icons.upload_file),label:Text(proof?.name??'Select payment screenshot')),
-                  const SizedBox(height:8),
-                  FilledButton(onPressed:busy?null:()=>submit(i['id'] as String),child:const Text('Submit payment for verification')),
-                  const SizedBox(height:6),
-                  const Text('Payment is marked paid only after the administrator verifies the bank credit.',style:TextStyle(fontSize:11)),
-                ]else if(!pending)const Text('Administrator payment QR is not enabled. Please contact support.'),
-              ],
-            ]));
-          }),
+          for(final item in inv)
+            invoiceCard(Map<String,dynamic>.from(item as Map),payments,qr),
           const SizedBox(height:14),
           panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('Payment history',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-            if(payments.isEmpty)const Padding(padding:EdgeInsets.only(top:10),child:Text('No payments submitted yet.')),
+            if(payments.isEmpty)const Padding(padding:EdgeInsets.only(top:10),child:Text('No payments yet.')),
             for(final item in payments)Builder(builder:(context){
               final p=Map<String,dynamic>.from(item as Map);
+              final submitted='${p['submitted_at']??''}';
+              final remarks='${p['remarks']??''}'.trim();
               return ListTile(
                 contentPadding:EdgeInsets.zero,
-                title:Text('UTR ${p['utr']}'),
-                subtitle:Text('Submitted: ${p['submitted_at']??''}\n${p['remarks']??''}\nActivation: ${p['activation_status']??'not applicable'}'),
-                isThreeLine:true,
-                trailing:Chip(label:Text('${p['status']}')),
+                title:Text('Payment · ${statusText(p['status'])}'),
+                subtitle:Text(remarks.isEmpty?submitted:'$submitted\n$remarks'),
+                isThreeLine:false,
               );
             }),
           ])),

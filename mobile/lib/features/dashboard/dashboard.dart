@@ -62,7 +62,7 @@ class _DashboardState extends State<Dashboard> {
         padding:const EdgeInsets.only(bottom:14),
         child:FeatureTile(
           title:'My Subscription',
-          subtitle:'View monthly bill, scan payment QR and submit verification',
+          subtitle:'View bills and payments',
           icon:Icons.qr_code_2,
           onTap:()=>openPage(context,'ownerSubscription'),
         ),

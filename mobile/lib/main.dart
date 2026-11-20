@@ -95,17 +95,17 @@ class _SubscriptionAccessGateState extends State<SubscriptionAccessGate> {
           Text(pending?'Choose your plan':'Payment required to continue',
             textAlign:TextAlign.center,style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
           const SizedBox(height:12),
-          Text(pending?'Start your one-time 15-day free trial, or pay now to activate a subscription.'
-              :'Your trial or paid period has ended. Your records are safe. Complete payment and wait for administrator verification to restore access.',
+          Text(pending?'Try Stay Sync free for 15 days, or subscribe now.'
+              :'Your plan has ended. Make a payment to continue using Stay Sync.',
               textAlign:TextAlign.center),
           const SizedBox(height:22),
-          const Text('₹39 per billable resident or owner, per month + GST',textAlign:TextAlign.center),
+          const Text('₹39 per person / month + GST',textAlign:TextAlign.center),
           const SizedBox(height:20),
           if(pending)FilledButton.icon(onPressed:busy?null:startTrial,
               icon:const Icon(Icons.hourglass_top),label:const Text('Start 15-day free trial')),
           const SizedBox(height:10),
           OutlinedButton.icon(onPressed:busy?null:()=>openPage(context,'ownerSubscription'),
-              icon:const Icon(Icons.payments_outlined),label:const Text('View invoice and pay')),
+              icon:const Icon(Icons.payments_outlined),label:const Text('View bill & pay')),
           TextButton(onPressed:busy?null:() async {
             setState(()=>busy=true);
             try{await c.refresh();}catch(_){ if(mounted)setState(()=>error='Could not refresh subscription status.'); }
@@ -116,7 +116,7 @@ class _SubscriptionAccessGateState extends State<SubscriptionAccessGate> {
               style:const TextStyle(color:Colors.red))),
           if(busy)const Center(child:CircularProgressIndicator()),
           const SizedBox(height:12),
-          const Text('Forgot password, support and account recovery remain available.',textAlign:TextAlign.center,
+          const Text('Your information stays saved.',textAlign:TextAlign.center,
               style:TextStyle(fontSize:12)),
         ]),
       ))),

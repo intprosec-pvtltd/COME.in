@@ -391,7 +391,7 @@ Widget propertySelector(BuildContext context){
         },
         child:Text(busy?'Updating…':'Confirm room / bed transfer')),
         const SizedBox(height:10),
-        const Text('The previous bed is released. Transfers are recorded with a reason and timestamp.',
+        const Text('The previous bed becomes available after transfer.',
         style:TextStyle(color:muted,
         fontSize:11))
       ]))
@@ -686,7 +686,7 @@ Widget propertySelector(BuildContext context){
 }
 
 Future<void> showResidentCredentials(BuildContext context,Map<String,dynamic> credential) async {
-  final text='COME.in resident access\nLogin: ${credential['email']}\nTemporary password: ${credential['temporary_password']}\nValid for 72 hours. Please sign in and change your password immediately. Do not forward this message.';
+  final text='Stay Sync Manage resident access\nLogin: ${credential['email']}\nTemporary password: ${credential['temporary_password']}\nValid for 72 hours. Please sign in and change your password immediately. Do not forward this message.';
   await showDialog<void>(context:context,barrierDismissible:false,builder:(dialogContext)=>AlertDialog(
     title:const Text('Resident access created'),
     content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -730,7 +730,7 @@ class _OwnerInviteResidentPageState extends State<OwnerInviteResidentPage> {
     final rooms=app.rows('rooms').where((r)=>(r['property_id']??0)==propertyId).toList();
     final matching=rooms.where((r)=>r['name']==room).toList();
     final capacity=matching.isEmpty?0:(matching.first['beds'] as num).toInt();
-    return PageBody(title:'Create resident account',subtitle:'Only PG owners can issue resident access. Temporary credentials expire in 72 hours.',children:[
+    return PageBody(title:'Create resident account',subtitle:'Create a login for your resident.',children:[
       Surface(child:Form(key:form,child:Column(children:[
         TextFormField(controller:name,decoration:const InputDecoration(labelText:'Resident full name'),validator:(v)=>(v??'').trim().length<2?'Enter a name':null),
         const SizedBox(height:12),

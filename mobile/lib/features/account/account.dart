@@ -12,7 +12,7 @@ class AccountPage extends StatelessWidget {
     final app=AppScope.of(context),
     p=app.profile;
     return PageBody(title:'Your account',
-    subtitle:'Profile, settings and essentials.',
+    subtitle:'Manage your account and settings.',
     children:[
       Surface(child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const OfficialBrand(width:58,iconOnly:true),
@@ -53,7 +53,7 @@ class AccountPage extends StatelessWidget {
       const SizedBox(height:15),
       OutlinedButton.icon(onPressed:()async{
         if(!await ask(context,
-        'Log out of COME.in?')||!context.mounted)return;
+        'Log out of Stay Sync Manage?')||!context.mounted)return;
         await perform(context,
         app.logout);
         if(context.mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
@@ -284,7 +284,7 @@ class _NotificationPreferencesPageState extends State<NotificationPreferencesPag
         const SizedBox(height:12),
         _AccommodationInfo(label:'Next due date',value:last==null?'—':'${last['due_date']}'),
         const SizedBox(height:12),
-        const Text('Pending payment proofs are not counted as paid until your PG owner approves them.',style:TextStyle(color:muted,fontSize:12)),
+        const Text('Payments appear after confirmation.',style:TextStyle(color:muted,fontSize:12)),
       ])),
       FeatureTile(title:'Rent & receipts',subtitle:'View bills, payments and receipts',icon:Icons.receipt_long_outlined,onTap:()=>openPage(context,'rent')),
       FeatureTile(title:'Facility updates',subtitle:'Water, power, maintenance and Wi-Fi',icon:Icons.water_drop_outlined,onTap:()=>openPage(context,'facilities'))
@@ -380,7 +380,7 @@ class _AccommodationInfo extends StatelessWidget {
     super.key
   });
   @override Widget build(BuildContext context)=>const PageBody(title:'Terms & privacy',
-  subtitle:'Company review required before public release.',
+  subtitle:'How your information is used.',
   children:[
     Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
     children:[
@@ -388,7 +388,7 @@ class _AccommodationInfo extends StatelessWidget {
       style:TextStyle(fontSize:17,
       fontWeight:FontWeight.w800)),
       SizedBox(height:12),
-      Text('COME.in stores account and accommodation details, invoices, payment proof, complaints and community messages to deliver PG management services. Access is controlled by your assigned PG and account role.',
+      Text('Stay Sync Manage uses your account, PG and payment information to provide the service. Access depends on your assigned PG and role.',
       style:TextStyle(height:1.7,
       fontSize:12)),
       SizedBox(height:18),
@@ -396,7 +396,7 @@ class _AccommodationInfo extends StatelessWidget {
       style:TextStyle(fontSize:17,
       fontWeight:FontWeight.w800)),
       SizedBox(height:12),
-      Text('Before launch, IntProSec and the operating PG must publish their applicable privacy notice and terms, including retention, deletion requests, support contacts and grievance handling. This screen is review content; it is not a finalized legal policy.',
+      Text('Formal privacy terms are not yet published here. Contact IntProSec for the current policy and data requests.',
       style:TextStyle(height:1.7,
       fontSize:12))
     ])),

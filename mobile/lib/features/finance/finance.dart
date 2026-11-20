@@ -109,7 +109,7 @@ dynamic>> scopedInvoices(AppController app){
       detail:app.owner?'${all.length} invoices · ${app.period}':'Pay directly to your PG owner.'),
       if(!app.owner)Surface(child:ListTile(
         title:const Text('Agreed monthly rent'),
-        subtitle:const Text('The rent recorded for your accommodation; actual dues follow issued invoices.'),
+        subtitle:const Text('Your monthly rent'),
         trailing:Text(inr((app.data['accommodation'] as Map?)?['monthly_rent']??'0'),
           style:const TextStyle(fontWeight:FontWeight.w700)))),
       Wrap(spacing:7,
@@ -166,7 +166,7 @@ dynamic>> scopedInvoices(AppController app){
           const SizedBox(height:8),
           Text('${tr(context,'Submitted for verification')}: ${inr(proof['amount'])}',
             style:const TextStyle(color:Color(0xFF9A5200),fontSize:12,fontWeight:FontWeight.w700)),
-          Text(tr(context,'Payment proof submitted; awaiting owner bank-credit verification.'),
+          Text(tr(context,'Payment submitted. Awaiting confirmation.'),
             style:const TextStyle(color:Color(0xFF9A5200),fontSize:11)),
         ],
         if(rejectedProof)...[
@@ -346,7 +346,7 @@ dynamic>> scopedInvoices(AppController app){
     final paid=fullyPaid?balance:amount(value.text);
     final remaining=(balance-paid).clamp(0, double.infinity);
     return PageBody(title:'Submit payment',
-      subtitle:'Upload proof of payment. Your PG owner will confirm the bank credit.',
+      subtitle:'Attach a screenshot of your payment.',
       children:[
         HeroCard(label:'Invoice balance',value:inr(balance)),
         Surface(child:Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -394,7 +394,7 @@ dynamic>> scopedInvoices(AppController app){
             if(mounted){setState(()=>busy=false);if(ok)Navigator.pop(context);}
           },child:Text(tr(context,busy?'Please wait…':'Submit for verification')))),
           const SizedBox(height:8),
-          const Text('Your rent balance will update after the owner verifies actual bank credit.',
+          const Text('Your balance updates once payment is confirmed.',
             style:TextStyle(fontSize:11,color:muted)),
         ]))),
       ]);
@@ -851,7 +851,7 @@ int id)async{
       'beds'
     ]as int));
     return PageBody(title:'Reports & analytics',
-    subtitle:'Calculated from your recorded invoices and expenses.',
+    subtitle:'Income and expenses at a glance.',
     refresh:app.refresh,
     children:[
       propertySelector(context),
