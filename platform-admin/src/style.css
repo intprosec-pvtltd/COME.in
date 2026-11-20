@@ -471,3 +471,9 @@ body,.app-shell { background:linear-gradient(135deg,#fdf9ff 0%,#fff8fd 60%,#fff5
 }
 .ss-qr-preview{display:block;width:min(240px,100%);max-height:260px;object-fit:contain;border:1px solid #e7ddeb;border-radius:12px;padding:12px;background:white;margin:12px 0}
 .ss-qr-status{font-weight:700;color:#4b2860}
+
+/* Accessible visibility toggle for password fields outside login. */
+.ss-admin-password { position:relative; display:flex; align-items:center; width:100%; margin-top:7px; }
+.ss-admin-password input { width:100%; margin-top:0; padding-right:84px; }
+.ss-admin-password .ss-password-toggle { position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#602582; padding:8px 10px; font-weight:700; font-size:13px; cursor:pointer; }
+.ss-admin-password .ss-password-toggle:focus-visible { outline:2px solid #7c3aed; border-radius:8px; }

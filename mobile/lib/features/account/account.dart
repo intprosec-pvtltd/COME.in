@@ -135,6 +135,7 @@ class AccountPage extends StatelessWidget {
   password=TextEditingController(),
   confirm=TextEditingController();
   bool busy=false;
+  bool showCurrent=false, showNew=false, showConfirm=false;
   @override void dispose(){
     current.dispose();
     password.dispose();
@@ -154,8 +155,18 @@ class AccountPage extends StatelessWidget {
         'Confirm new password')
       ])Padding(padding:const EdgeInsets.only(bottom:16),
       child:TextFormField(controller:row.$1,
-      obscureText:true,
-      decoration:InputDecoration(labelText:row.$2),
+      obscureText:row.$1==current?!showCurrent:row.$1==password?!showNew:!showConfirm,
+      decoration:InputDecoration(labelText:row.$2,suffixIcon:IconButton(
+        tooltip:(row.$1==current?showCurrent:row.$1==password?showNew:showConfirm)
+            ?'Hide ${row.$2.toLowerCase()}':'Show ${row.$2.toLowerCase()}',
+        icon:Icon((row.$1==current?showCurrent:row.$1==password?showNew:showConfirm)
+            ?Icons.visibility_off_outlined:Icons.visibility_outlined),
+        onPressed:()=>setState((){
+          if(row.$1==current){showCurrent=!showCurrent;}
+          else if(row.$1==password){showNew=!showNew;}
+          else{showConfirm=!showConfirm;}
+        }),
+      )),
       validator:(v)=>row.$1==confirm?v==password.text?null:'Passwords must match':row.$1==password&&(v??'').length<8?'Use at least 8 characters':(v??'').isEmpty?'Required':null)),
       FilledButton(onPressed:busy?null:()async{
         if(!form.currentState!.validate())return;

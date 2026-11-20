@@ -384,8 +384,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
       const Text('Submit an identity document',
         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: plum)),
       const SizedBox(height: 8),
-      const Text('Select a clear photo or PDF of an accepted identity document. '
-          'Your PG owner will review it privately.'),
+      const Text('Upload a clear ID photo or PDF for PG owner review.'),
       const SizedBox(height: 12),
       Container(
         width: double.infinity,
@@ -398,13 +397,13 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
           Icon(Icons.upload_file_outlined, size: 37, color: plum),
           SizedBox(height: 6),
           Text('JPG, PNG or PDF', style: TextStyle(fontWeight: FontWeight.w800)),
-          Text('Maximum 5 MB • One active submission at a time',
+          Text('Up to 5 MB • One pending submission',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: Color(0xFF76657C))),
         ]),
       ),
       const SizedBox(height: 10),
-      const Text('Use masked Aadhaar or another acceptable ID. Do not share an unmasked Aadhaar number.',
+      const Text('Use masked Aadhaar or another accepted ID. Never upload unmasked Aadhaar.',
         style: TextStyle(fontSize: 12, color: Color(0xFF76657C))),
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
@@ -413,7 +412,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         activeColor: plum,
         value: consent,
         onChanged: uploading ? null : (v) => setState(() => consent = v ?? false),
-        title: const Text('I consent to securely sharing this document with my PG owner for manual review.',
+        title: const Text('I agree to share this ID with my PG owner for review.',
           style: TextStyle(fontSize: 13)),
       ),
       const SizedBox(height: 6),
@@ -425,16 +424,16 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
             ? const SizedBox(width: 18, height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.file_upload_outlined),
-        label: Text(uploading ? 'Submitting…' : 'Choose document & submit'))),
+        label: Text(uploading ? 'Submitting…' : 'Upload ID proof'))),
     ],
   ));
 
   Widget _residentSummary(Map<String, dynamic> proof) {
     final status = '${proof['status']}';
     final message = switch (status) {
-      'approved' => 'Your PG owner has approved this submission. No further upload is needed.',
-      'rejected' => 'Your PG owner rejected this submission. You can submit a replacement below.',
-      _ => 'Your proof has been sent to your PG owner. You cannot submit another while review is pending.',
+      'approved' => 'Approved by your PG owner.',
+      'rejected' => 'Rejected. Upload a replacement below.',
+      _ => 'Awaiting PG owner review.',
     };
     return Surface(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -462,7 +461,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     title: ownerView ? 'Resident verification' : 'Complete your verification',
     subtitle: ownerView
         ? 'Documents submitted by this resident. Only your PG team can review.'
-        : 'Identity documents are reviewed manually by your PG owner.',
+        : 'Upload your ID for PG owner review.',
     refresh: refresh,
     children: [
       if (loading) const Center(child: CircularProgressIndicator()),
