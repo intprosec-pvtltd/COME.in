@@ -38,7 +38,7 @@ void main() {
     expect(find.text('Same spaces. Brighter days.'), findsOneWidget);
     expect(find.text('Sign in to COME.in'), findsNothing);
     expect(find.byType(SingleChildScrollView), findsWidgets);
-    expect(find.text('Phone Number'), findsOneWidget);
+    expect(find.text('Mobile number'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
   });

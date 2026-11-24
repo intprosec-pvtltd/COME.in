@@ -1,5 +1,6 @@
 import '../../core/localization.dart';
 import '../../core/display_photo.dart';
+import '../../core/email_validation.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../app/router.dart';
@@ -104,11 +105,12 @@ class AccountPage extends StatelessWidget {
       TextFormField(controller:email,
       keyboardType:TextInputType.emailAddress,
       decoration:const InputDecoration(labelText:'Email'),
-      validator:(v)=>(v??'').contains('@')?null:'Enter a valid email'),
+      autovalidateMode:AutovalidateMode.onUserInteraction,
+      validator:(v)=> (v??'').trim().toLowerCase() == '${AppScope.of(context).profile['email']}'.toLowerCase() ? null : emailError(v)),
       const SizedBox(height:16),
       TextFormField(controller:phone,
       keyboardType:TextInputType.phone,
-      decoration:const InputDecoration(labelText:'Contact phone',helperText:'Does not change your verified login number.')),
+      decoration:const InputDecoration(labelText:'Contact phone',helperText:'Does not change your verified login number.',helperMaxLines:3)),
       if('${AppScope.of(context).profile['verified_login_phone']??''}'.isNotEmpty)
         Padding(padding:const EdgeInsets.only(top:8),child:Text('Verified login: ${AppScope.of(context).profile['verified_login_phone']}. Contact support to change it.',style:TextStyle(color:secondaryText(context),fontSize:12))),
       const SizedBox(height:20),

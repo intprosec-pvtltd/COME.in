@@ -28,10 +28,20 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/brand/
-    - assets/branding/
-    - assets/auth/
-    - assets/onboarding/
+    - assets/brand/intprosec_dark.webp
+    - assets/brand/intprosec_on_dark.png
+    - assets/branding/stay_sync_logo_transparent.png
+    - assets/branding/stay_sync_logo_dark.png
+    - assets/branding/stay_sync_icon_clean.png
+    - assets/branding/stay_sync_icon_square.png
+    - assets/branding/mobile_login_background.png
+    - assets/auth/login_background.png
+    - assets/auth/signup_background.png
+    - assets/onboarding/illustration_1.png
+    - assets/onboarding/illustration_2.png
+    - assets/onboarding/illustration_3.png
+    - assets/onboarding/traveler1.svg
+    - assets/onboarding/traveler2.svg
 
 flutter_launcher_icons:
   android: true

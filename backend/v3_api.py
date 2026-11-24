@@ -2,6 +2,7 @@
 No existing columns or data are removed. Run migrate_v3.py before upgrading.
 """
 import hashlib, json, os, secrets, uuid, re
+from email_validation import email_error
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -93,7 +94,8 @@ def safe_file(s,u,fid,purpose):
  if f.author_id!=u.id or f.purpose!=purpose:raise HTTPException(403,'This attachment cannot be used here')
 def safe_email(v):
  v=v.strip().lower()
- if '@' not in v or '.' not in v.split('@')[-1]:raise HTTPException(422,'Enter a valid email address')
+ error=email_error(v)
+ if error:raise HTTPException(422,error)
  return v
 def security_check(u,payload,authorization,session):
  key=hashlib.sha256(authorization.encode()).hexdigest()
@@ -113,7 +115,9 @@ def profile(u:User=Depends(current),s:Session=Depends(db)):return profile_out(s,
 def edit_profile(data:dict,u:User=Depends(current),s:Session=Depends(db)):
  if 'appearance' in data and data['appearance'] not in ('Light','Dark','System'):raise HTTPException(422,'Invalid appearance')
  if 'notifications' in data and (not isinstance(data['notifications'],dict) or any(not isinstance(v,bool) for v in data['notifications'].values())):raise HTTPException(422,'Notification preferences must contain boolean values')
- name=str(data.get('name',u.name)).strip();email=safe_email(str(data.get('email',u.email)))
+ name=str(data.get('name',u.name)).strip();raw_email=str(data.get('email',u.email)).strip().lower()
+ email=u.email if raw_email==u.email.lower() else safe_email(raw_email)
+ if email!=u.email and s.scalar(select(User).where(User.email==email,User.id!=u.id)):raise HTTPException(409,'Email is already registered')
  if not 2<=len(name)<=120:raise HTTPException(422,'Name must contain 2–120 characters')
  u.name=name;u.email=email
  prefs=meta(s,u.tenant_id,'profile',u.id)
@@ -296,7 +300,7 @@ def send_recovery_email(email,code):
 @router.post('/forgot-password')
 def forgot(data:RecoveryRequest,s:Session=Depends(db)):
  if not ((os.getenv('MAILJET_API_KEY') and os.getenv('MAILJET_SECRET_KEY') and os.getenv('MAILJET_FROM_EMAIL')) or ((os.getenv('RESEND_API_KEY') or os.getenv('SMTP_HOST')) and (os.getenv('RESET_EMAIL_FROM') or os.getenv('SMTP_FROM') or os.getenv('SMTP_USER')))):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
- email=safe_email(data.email);u=s.scalar(select(User).where(User.email==email))
+ email=data.email.strip().lower();u=s.scalar(select(User).where(User.email==email))
  from phone_auth import VerifiedPhone
  if u and s.get(VerifiedPhone,u.id):u=None # Verified accounts recover only via mobile OTP.
  if u:
@@ -309,7 +313,7 @@ def forgot(data:RecoveryRequest,s:Session=Depends(db)):
 
 @router.post('/reset-password')
 def reset_password(data:ResetRequest,s:Session=Depends(db)):
- u=s.scalar(select(User).where(User.email==safe_email(data.email)))
+ u=s.scalar(select(User).where(User.email==data.email.strip().lower()))
  from phone_auth import VerifiedPhone
  if u and s.get(VerifiedPhone,u.id):u=None
  md=meta(s,u.tenant_id,'recovery',u.id) if u else {}

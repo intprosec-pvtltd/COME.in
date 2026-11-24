@@ -15,7 +15,7 @@ def test_display_photos_permissions_and_persistence(monkeypatch):
         monkeypatch.setenv('DATABASE_URL', 'sqlite:///' + str(Path(tmp) / 'photos.db'))
         monkeypatch.setenv('SECRET_KEY', 'photo-test-key-32-characters-long')
         monkeypatch.setenv('DEMO_SEED', 'false')
-        names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api', 'account_deletion', 'push_notifications')
+        names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api', 'account_deletion', 'push_notifications', 'phone_auth')
         original = {name: sys.modules.get(name) for name in names}
         for name in names: sys.modules.pop(name, None)
         try:

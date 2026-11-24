@@ -190,7 +190,7 @@ def test_multi_pg_content_isolation_and_complaint_alerts():
     p1=create('property',{'name':'North House'},h)
     p2=create('property',{'name':'South House'},h)
     def invite(name,pid):
-        mail=f'{name.lower()}-{uuid.uuid4().hex}@test.pg'
+        mail=f'{name.lower().replace(chr(32), chr(45))}-{uuid.uuid4().hex}@test.pg'
         r=req('POST','/v3/residents/invite',h,{'name':name,'email':mail,'phone':'9876543210','property_id':pid},201)
         temp = r['temporary_password']
         first_session = login(mail, temp)

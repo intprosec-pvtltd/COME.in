@@ -15,7 +15,7 @@ def test_invoice_mismatch_is_advisory_and_bank_gate_remains(monkeypatch):
         monkeypatch.setenv('DEMO_SEED', 'false')
         # Preserve modules imported at pytest collection time (e.g. test_v3.py).
         # This test temporarily imports a separate FastAPI/SQLite app.
-        _isolation_names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api')
+        _isolation_names = ('main', 'v2_api', 'v3_api', 'identity_api', 'platform_api', 'phone_auth')
         _prior_modules = {name: sys.modules.get(name) for name in _isolation_names}
         for name in _isolation_names:
             sys.modules.pop(name, None)

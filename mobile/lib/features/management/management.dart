@@ -1,3 +1,4 @@
+import '../../core/email_validation.dart';
 import '../../core/display_photo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -734,7 +735,7 @@ class _OwnerInviteResidentPageState extends State<OwnerInviteResidentPage> {
       Surface(child:Form(key:form,child:Column(children:[
         TextFormField(controller:name,decoration:const InputDecoration(labelText:'Resident full name'),validator:(v)=>(v??'').trim().length<2?'Enter a name':null),
         const SizedBox(height:12),
-        TextFormField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Resident email'),validator:(v)=>(v??'').contains('@')?null:'Enter a valid email'),
+        TextFormField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Resident email'),autovalidateMode:AutovalidateMode.onUserInteraction,validator:emailError),
         const SizedBox(height:12),
         TextFormField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'Phone (optional)')),
         const SizedBox(height:12),

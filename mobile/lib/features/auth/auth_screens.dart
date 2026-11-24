@@ -5,6 +5,7 @@ import '../../app/controller.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
 import 'phone_verification.dart';
+import '../../core/email_validation.dart';
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
   @override State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -175,7 +176,7 @@ class SignInScreen extends StatefulWidget {
           _AuthField(child:TextFormField(controller:phone,keyboardType:TextInputType.phone,
             onChanged: (_) => setState(() => _showActivationAfterFailure=false),
             autofillHints:const [AutofillHints.telephoneNumber],textInputAction:TextInputAction.next,
-            decoration:InputDecoration(hintText:tr(context,'Phone Number'),helperText:'India +91 (default)',prefixIcon:const Icon(Icons.phone_outlined)),
+            decoration:mobileDecoration(context, phone.text),
             validator:(v)=>mobileError(context,v))),
           const SizedBox(height:10),
           _AuthField(child:TextFormField(controller:password,obscureText:hidden,
@@ -307,7 +308,9 @@ class SignInScreen extends StatefulWidget {
         _AuthField(child:TextFormField(controller:controls[key],obscureText:key=='password'&&!showSignupPassword,
           keyboardType:key=='phone'?TextInputType.phone:key=='email'?TextInputType.emailAddress:TextInputType.text,
           textInputAction:TextInputAction.next,
-          decoration:InputDecoration(
+          onChanged: key=='phone' ? (_) => setState(() {}) : null,
+          autovalidateMode: key=='email' ? AutovalidateMode.onUserInteraction : AutovalidateMode.disabled,
+          decoration:key=='phone' ? mobileDecoration(context, controls[key]!.text) : InputDecoration(
             prefixIcon:Icon(key=='name'?Icons.person_outline:key=='password'?Icons.lock_outline:key=='phone'?Icons.phone_outlined:key=='property_name'?Icons.home_outlined:Icons.mail_outline),
             hintText:tr(context,{'name':'Full Name','email':'Email','phone':'Phone Number','password':'Password','property_name':'Property Name'}[key]!),
             suffixIcon:key=='password'?IconButton(
@@ -315,7 +318,7 @@ class SignInScreen extends StatefulWidget {
               onPressed:()=>setState(()=>showSignupPassword=!showSignupPassword),
               icon:Icon(showSignupPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),
             ):null),
-          validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='phone'&&normalizeMobile(v)==null?tr(context,'Enter a valid mobile number'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'&&!v.contains('@')?tr(context,'Enter a valid email'):null)),
+          validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='phone'&&normalizeMobile(v)==null?tr(context,'Enter a valid mobile number'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'?emailError(v):null)),
         const SizedBox(height:10),
       ],
       _AuthField(child:TextFormField(controller:confirmPassword,obscureText:!showConfirmPassword,
@@ -379,7 +382,8 @@ class _RecoveryScreenState extends State<RecoveryScreen>{
     subtitle:'Enter your verified mobile number to receive an SMS verification code.',children:[
     Surface(child:Form(key:form,child:Column(children:[
       TextFormField(controller:phone,keyboardType:TextInputType.phone,
-        decoration:const InputDecoration(labelText:'Mobile number',hintText:'+91 98765 43210',prefixIcon:Icon(Icons.phone_outlined)),
+        decoration:mobileDecoration(context, phone.text, label:true),
+        onChanged: (_) => setState(() {}),
         validator:(v)=>mobileError(context,v)),
       const SizedBox(height:15),
       FilledButton(onPressed:busy?null:recover,child:Text(busy?'Requesting…':'Send SMS code')),

@@ -1,3 +1,4 @@
+import '../../core/email_validation.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,24 @@ String? normalizeMobile(String? raw) {
 
 String? mobileError(BuildContext context, String? value) =>
     normalizeMobile(value) == null ? tr(context, 'Enter a valid mobile number') : null;
+
+/// A display-only prefix; the complete raw number is always normalized on submit.
+InputDecoration mobileDecoration(BuildContext context, String raw, {bool label = false}) {
+  final compact = raw.trim().replaceAll(RegExp(r'[\s()-]'), '');
+  final explicit = compact.startsWith('+') || (compact.startsWith('91') && compact.length > 10);
+  return InputDecoration(
+    labelText: label ? tr(context, 'Mobile number') : null,
+    hintText: tr(context, 'Mobile number'),
+    prefixIcon: explicit ? const Icon(Icons.phone_outlined) : Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('+91', style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+        const SizedBox(width: 10),
+        SizedBox(height: 22, child: VerticalDivider(width: 1, color: Theme.of(context).colorScheme.outlineVariant)),
+      ]),
+    ),
+  );
+}
 
 /// Reusable verification screen. The backend owns expiry, replay protection,
 /// and limits; the client countdown is solely a user-interface convenience.
@@ -126,7 +145,7 @@ class _ActivateMobilePageState extends State<ActivateMobilePage> {
     children: [Surface(child: Form(key: form, child: Column(children: [
       TextFormField(controller: email, keyboardType: TextInputType.emailAddress,
         decoration: const InputDecoration(labelText: 'Existing account email'),
-        validator: (v) => (v ?? '').contains('@') ? null : 'Enter your account email'),
+        validator: emailError),
       const SizedBox(height: 12),
       TextFormField(controller: password, obscureText: hidden,
         decoration: InputDecoration(labelText: 'Existing password', suffixIcon: IconButton(
@@ -134,7 +153,8 @@ class _ActivateMobilePageState extends State<ActivateMobilePage> {
         validator: (v) => (v ?? '').isEmpty ? 'Enter your password' : null),
       const SizedBox(height: 12),
       TextFormField(controller: phone, keyboardType: TextInputType.phone,
-        decoration: const InputDecoration(labelText: 'Mobile number', hintText: '+91 98765 43210'),
+        decoration: mobileDecoration(context, phone.text, label: true),
+        onChanged: (_) => setState(() {}),
         validator: (v) => mobileError(context, v)),
       const SizedBox(height: 12),
       if (error != null) Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),

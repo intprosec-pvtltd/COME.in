@@ -1,3 +1,4 @@
+import '../../core/email_validation.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../core/design.dart';
@@ -334,7 +335,7 @@ class EntityForm extends StatefulWidget {
           if(f.key=='monthly_rent'&&(num.tryParse(value)??-1)<0)return 'Monthly rent cannot be negative';
           if(f.key=='beds'&&((int.tryParse(value)??0)<1||(int.tryParse(value)??0)>100))return 'Use a whole number from 1–100';
           if(f.secret&&value.length<8)return 'Use at least 8 characters';
-          if(f.key=='email'&&!value.contains('@'))return 'Enter a valid email';
+          if(f.key=='email')return emailError(value);
           return null;
         })),
         if(error!=null)Padding(padding:const EdgeInsets.only(bottom:15),
