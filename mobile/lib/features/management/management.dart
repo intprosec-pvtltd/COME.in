@@ -58,7 +58,7 @@ Widget propertySelector(BuildContext context){
         ]),
         const SizedBox(height:12),
         Text('${p['city']}\n${p['address']}',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:12)),
         const SizedBox(height:10),
         const Text('Open property →',
@@ -187,15 +187,15 @@ Widget propertySelector(BuildContext context){
           style:const TextStyle(fontWeight:FontWeight.w800,
           fontSize:16))),
           Text('${r['floor']??'Ground'}',
-          style:const TextStyle(color:muted,
+          style:TextStyle(color:secondaryText(context),
           fontSize:11))
         ]),
         const SizedBox(height:6),
         Row(children:[
-          const Icon(Icons.apartment_rounded,size:19,color:plum),
+          Icon(Icons.apartment_rounded,size:19,color:Theme.of(context).colorScheme.primary),
           const SizedBox(width:5),
           Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'}',
-            style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700))),
+            style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:14,fontWeight:FontWeight.w700))),
         ]),
         const SizedBox(height:13),
         Wrap(spacing:8,
@@ -391,8 +391,7 @@ Widget propertySelector(BuildContext context){
         },
         child:Text(busy?'Updating…':'Confirm room / bed transfer')),
         const SizedBox(height:10),
-        const Text('The previous bed becomes available after transfer.',
-        style:TextStyle(color:muted,
+        Text('The previous bed becomes available after transfer.',style:TextStyle(color:secondaryText(context),
         fontSize:11))
       ]))
     ]);
@@ -424,17 +423,17 @@ Widget propertySelector(BuildContext context){
           Text('${r['name']}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
           const SizedBox(height:7),
           Row(children:[
-            const Icon(Icons.apartment_rounded,color:plum,size:19),
+            Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:19),
             const SizedBox(width:6),
             Expanded(child:Text('PG: ${app.find('properties', int.tryParse('${r['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
               maxLines:2,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:plum,fontSize:15,fontWeight:FontWeight.w700))),
+              style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:15,fontWeight:FontWeight.w700))),
           ]),
           const SizedBox(height:5),
           Text('Room ${r['room']??'—'} · Bed ${r['bed']??'—'}',
-            style:const TextStyle(color:muted,fontSize:13)),
+            style:TextStyle(color:secondaryText(context),fontSize:13)),
         ])),
-        const Icon(Icons.chevron_right_rounded,color:plum),
+        Icon(Icons.chevron_right_rounded,color:Theme.of(context).colorScheme.primary),
       ])),
       if(residents.isEmpty)const EmptyState('No matching residents.'),
       Padding(padding:const EdgeInsets.symmetric(vertical:10),child:FilledButton.icon(
@@ -569,22 +568,22 @@ Widget propertySelector(BuildContext context){
         int.tryParse('${r['property_id']}')==app.propertyId))
         Surface(onTap:()=>openPage(context,'staffDetail',id:s['id'] as int),
         child:Row(children:[
-          const Icon(Icons.badge_outlined,color:plum,size:32),
+          Icon(Icons.badge_outlined,color:Theme.of(context).colorScheme.primary,size:32),
           const SizedBox(width:14),
           Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text('${s['name']}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
             const SizedBox(height:6),
             Row(children:[
-              const Icon(Icons.apartment_rounded,color:plum,size:19),
+              Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:19),
               const SizedBox(width:6),
               Expanded(child:Text('PG: ${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
                 maxLines:2,overflow:TextOverflow.ellipsis,
-                style:const TextStyle(fontSize:15,color:plum,fontWeight:FontWeight.w700))),
+                style:TextStyle(fontSize:15,color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w700))),
             ]),
             const SizedBox(height:5),
-            Text('${s['job']??'Maintenance'}',style:const TextStyle(color:muted,fontSize:13)),
+            Text('${s['job']??'Maintenance'}',style:TextStyle(color:secondaryText(context),fontSize:13)),
           ])),
-          const Icon(Icons.chevron_right_rounded,color:plum),
+          Icon(Icons.chevron_right_rounded,color:Theme.of(context).colorScheme.primary),
         ])),
       if(app.rows('staff').isEmpty)const EmptyState('No staff members yet.'),
       addButton(context,
@@ -610,10 +609,10 @@ Widget propertySelector(BuildContext context){
     subtitle:'${s['job']??'Maintenance'}',
     children:[
       Surface(child:Row(children:[
-        const Icon(Icons.apartment_rounded,color:plum,size:23),
+        Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:23),
         const SizedBox(width:10),
         Expanded(child:Text('PG: ${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
-          style:const TextStyle(color:plum,fontSize:16,fontWeight:FontWeight.w700))),
+          style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:16,fontWeight:FontWeight.w700))),
       ])),
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[

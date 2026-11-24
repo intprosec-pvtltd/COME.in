@@ -1,5 +1,6 @@
 """V35 risk acknowledgement response contract, tested alongside API integration tests."""
 import inspect
+import main  # initialize the app before inspecting registered V3 handlers
 
 
 def test_payment_state_defaults_for_older_records():

@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../app/controller.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
+import 'phone_verification.dart';
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
   @override State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -114,28 +115,40 @@ class SignInScreen extends StatefulWidget {
   @override State<SignInScreen> createState()=>_SignInScreenState();
 } class _SignInScreenState extends State<SignInScreen>{
   final form=GlobalKey<FormState>();
-  final email=TextEditingController(),
+  final phone=TextEditingController(),
   password=TextEditingController();
   bool hidden=true,
   remember=true,
   busy=false;
   String? error;
+  bool _initialPhoneLoaded=false;
+  bool _showActivationAfterFailure=false;
+  @override void didChangeDependencies(){
+    super.didChangeDependencies();
+    if (!_initialPhoneLoaded) {
+      _initialPhoneLoaded=true;
+      phone.text=AppScope.of(context).lastVerifiedMobile??'';
+    }
+  }
   @override void dispose(){
-    email.dispose();
+    phone.dispose();
     password.dispose();
     super.dispose();
   } Future<void> login()async{
-    if(!form.currentState!.validate())return;
+    if(busy||!form.currentState!.validate())return;
     setState((){
       busy=true;
       error=null;
     });
     try{
-      await AppScope.of(context).login(email.text.trim(),
+      await AppScope.of(context).login(normalizeMobile(phone.text)!,
       password.text,
       remember);
     }catch(e){
-      if(mounted)setState(()=>error='$e');
+      if(mounted)setState(() {
+        error='$e';
+        _showActivationAfterFailure='$e'.contains('activate mobile login first');
+      });
     }finally{
       if(mounted)setState(()=>busy=false);
     }
@@ -159,10 +172,11 @@ class SignInScreen extends StatefulWidget {
             shadows:[Shadow(color:Color(0x66FFFFFF),blurRadius:5)])),
         const SizedBox(height:12),
         Form(key:form,child:Column(mainAxisSize:MainAxisSize.min,children:[
-          _AuthField(child:TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
-            autofillHints:const [AutofillHints.username],textInputAction:TextInputAction.next,
-            decoration:InputDecoration(hintText:tr(context,'Email or Phone'),prefixIcon:const Icon(Icons.mail_outline)),
-            validator:(v)=>v==null||(!v.contains('@')&&!RegExp(r'^\+?[0-9 ]{7,18}$').hasMatch(v))?tr(context,'Enter your email or phone'):null)),
+          _AuthField(child:TextFormField(controller:phone,keyboardType:TextInputType.phone,
+            onChanged: (_) => setState(() => _showActivationAfterFailure=false),
+            autofillHints:const [AutofillHints.telephoneNumber],textInputAction:TextInputAction.next,
+            decoration:InputDecoration(hintText:tr(context,'Phone Number'),helperText:'India +91 (default)',prefixIcon:const Icon(Icons.phone_outlined)),
+            validator:(v)=>mobileError(context,v))),
           const SizedBox(height:10),
           _AuthField(child:TextFormField(controller:password,obscureText:hidden,
             autofillHints:const [AutofillHints.password],textInputAction:TextInputAction.done,
@@ -190,9 +204,25 @@ class SignInScreen extends StatefulWidget {
           _AuthPrimary(label:tr(context,'Sign in'),busy:busy,onPressed:login),
         ])),
         const SizedBox(height:5),
-        TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const RegistrationScreen())),
+        TextButton(onPressed:() async {
+          final registered=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>const RegistrationScreen()));
+          if(mounted && registered!=null) {
+            setState(() { phone.text=registered; error=null; _showActivationAfterFailure=false; });
+          }
+        },
           child:Text(tr(context,'Create account'),textAlign:TextAlign.center,
             style:const TextStyle(color:plum,fontWeight:FontWeight.w800,fontSize:15))),
+        if (_showActivationAfterFailure || !AppScope.of(context).isKnownVerifiedMobile(normalizeMobile(phone.text)))
+        TextButton(onPressed: () async {
+          final activated = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ActivateMobilePage()));
+          if (mounted && activated != null) {
+            await AppScope.of(context).rememberVerifiedMobile(activated);
+            if (!mounted) return;
+            setState(() { phone.text = activated; error = null; _showActivationAfterFailure=false; });
+            feedback(context, 'Mobile verified. Sign in with your existing password.');
+          }
+        }, child: Text(tr(context,'Activate mobile login'),textAlign:TextAlign.center,
+          style:const TextStyle(color:plum,fontWeight:FontWeight.w700))),
         const _AuthSocialInfo(),
         const _AuthWhiteFooter(),
       ]);
@@ -226,21 +256,33 @@ class SignInScreen extends StatefulWidget {
     confirmPassword.dispose();
     super.dispose();
   } Future<void> submit()async{
+    if(busy)return;
     if(!form.currentState!.validate()||!terms){
       setState(()=>error=tr(context,'Complete the required fields and accept the terms.'));
       return;
     }setState(()=>busy=true);
     try{
-      await AppScope.of(context).api.request('/v3/register',
-      method:'POST',
-      body:{
-        for(final e in controls.entries)e.key:e.value.text.trim(),
-        'role':role
-      });
-      if(mounted){
-        feedback(context,
-        tr(context,'Account created. You can now sign in.'));
-        Navigator.pop(context);
+      final api = AppScope.of(context).api;
+      final phone = normalizeMobile(controls['phone']!.text)!;
+      final data = <String,dynamic>{
+        for(final key in ['name','email','property_name']) key:controls[key]!.text.trim(),
+        'phone':phone, 'password':controls['password']!.text, 'role':role,
+      };
+      Future<void> send() async {
+        await api.request('/v3/phone/register/request',method:'POST',body:{'phone':phone});
+      }
+      await send();
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => PhoneCodePage(
+        phone:phone, resend:send, verify:(code) async {
+          await api.request('/v3/phone/register',method:'POST',body:{...data,'code':code});
+          return 'verified';
+        })));
+      if(mounted && result == 'verified'){
+        await AppScope.of(context).rememberVerifiedMobile(phone);
+        if (!mounted) return;
+        feedback(context,tr(context,'Account created. You can now sign in.'));
+        Navigator.pop(context,phone);
       }
     }catch(e){
       if(mounted)setState(()=>error='$e');
@@ -273,7 +315,7 @@ class SignInScreen extends StatefulWidget {
               onPressed:()=>setState(()=>showSignupPassword=!showSignupPassword),
               icon:Icon(showSignupPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),
             ):null),
-          validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'&&!v.contains('@')?tr(context,'Enter a valid email'):null)),
+          validator:(v)=>v==null||v.trim().isEmpty?tr(context,'Required'):key=='phone'&&normalizeMobile(v)==null?tr(context,'Enter a valid mobile number'):key=='password'&&v.length<8?tr(context,'Use at least 8 characters'):key=='email'&&!v.contains('@')?tr(context,'Enter a valid email'):null)),
         const SizedBox(height:10),
       ],
       _AuthField(child:TextFormField(controller:confirmPassword,obscureText:!showConfirmPassword,
@@ -305,48 +347,46 @@ class SignInScreen extends StatefulWidget {
     const _AuthWhiteFooter(),
   ]));
 } class RecoveryScreen extends StatefulWidget {
-  const RecoveryScreen({
-    super.key
-  });
+  const RecoveryScreen({super.key});
   @override State<RecoveryScreen> createState()=>_RecoveryScreenState();
-} class _RecoveryScreenState extends State<RecoveryScreen>{
-  final email=TextEditingController();
+}
+class _RecoveryScreenState extends State<RecoveryScreen>{
+  final phone=TextEditingController();
+  final form=GlobalKey<FormState>();
   bool busy=false;
   String? message;
-  @override void dispose(){
-    email.dispose();
-    super.dispose();
-  } @override Widget build(BuildContext context)=>PageBody(title:'Reset password',
-  subtitle:'Recover access to your account',
-  children:[
-    Surface(child:Column(children:[
-      TextField(controller:email,
-      keyboardType:TextInputType.emailAddress,
-      decoration:const InputDecoration(labelText:'Email address',prefixIcon:Icon(Icons.mail_outline))),
+  @override void dispose(){phone.dispose();super.dispose();}
+  Future<void> recover() async {
+    if(busy||!form.currentState!.validate())return;
+    final api=AppScope.of(context).api;
+    final number=normalizeMobile(phone.text)!;
+    setState((){busy=true;message=null;});
+    try{
+      Future<void> send() async {await api.request('/v3/phone/forgot-password',method:'POST',body:{'phone':number});}
+      await send();
+      if(!mounted)return;
+      final token=await Navigator.of(context).push<String>(MaterialPageRoute(builder:(_)=>PhoneCodePage(
+        phone:number,resend:send,verify:(code) async {
+          final result=await api.request('/v3/phone/reset/verify',method:'POST',body:{'phone':number,'code':code});
+          return result['reset_token'] as String;
+        })));
+      if(!mounted||token==null)return;
+      await Navigator.of(context).push<void>(MaterialPageRoute(builder:(_)=>ResetPasswordScreen(phone:number,resetToken:token)));
+    }catch(e){if(mounted)setState(()=>message='$e');}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  @override Widget build(BuildContext context)=>PageBody(title:'Reset password',
+    subtitle:'Enter your verified mobile number to receive an SMS verification code.',children:[
+    Surface(child:Form(key:form,child:Column(children:[
+      TextFormField(controller:phone,keyboardType:TextInputType.phone,
+        decoration:const InputDecoration(labelText:'Mobile number',hintText:'+91 98765 43210',prefixIcon:Icon(Icons.phone_outlined)),
+        validator:(v)=>mobileError(context,v)),
       const SizedBox(height:15),
-      FilledButton(onPressed:busy?null:()async{
-        setState(()=>busy=true);
-        try{
-          await AppScope.of(context).api.request('/v3/forgot-password',
-          method:'POST',
-          body:{
-            'email':email.text.trim()
-          });
-          if(mounted){
-            setState(()=>message='If the account exists, a reset code has been emailed.');
-            await Navigator.push<void>(context,
-            MaterialPageRoute(builder:(_)=>ResetPasswordScreen(email:email.text.trim())));
-          }
-        }catch(e){
-          if(mounted)setState(()=>message='$e');
-        }finally{
-          if(mounted)setState(()=>busy=false);
-        }
-      },
-      child:Text(busy?'Requesting...':'Request reset')),
-      if(message!=null)Padding(padding:const EdgeInsets.only(top:15),
-      child:Text(message!))
-    ]))
+      FilledButton(onPressed:busy?null:recover,child:Text(busy?'Requesting…':'Send SMS code')),
+      if(message!=null)Padding(padding:const EdgeInsets.only(top:15),child:Text(message!)),
+      const SizedBox(height:10),
+      const Text('If you have not activated mobile login yet, activate it using your existing account credentials or contact your PG administrator.'),
+    ])))
   ]);
 } class DoorwayIllustration extends StatelessWidget {
   const DoorwayIllustration({
@@ -382,58 +422,35 @@ class SignInScreen extends StatefulWidget {
     Attribution()
   ]))));
 } class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({
-    super.key,
-    required this.email
-  });
-  final String email;
+  const ResetPasswordScreen({super.key,required this.phone,required this.resetToken});
+  final String phone,resetToken;
   @override State<ResetPasswordScreen> createState()=>_ResetPasswordScreenState();
-} class _ResetPasswordScreenState extends State<ResetPasswordScreen>{
-  bool showPassword=false;
+}
+class _ResetPasswordScreenState extends State<ResetPasswordScreen>{
+  bool showPassword=false,showConfirm=false,busy=false;
   final form=GlobalKey<FormState>();
-  final code=TextEditingController(),
-  password=TextEditingController();
-  bool busy=false;
-  @override void dispose(){
-    code.dispose();
-    password.dispose();
-    super.dispose();
-  } @override Widget build(BuildContext context)=>PageBody(title:'Choose a new password',
-  subtitle:'Enter the 6-digit code sent to ${widget.email}.',
-  children:[
-    Surface(child:Form(key:form,
-    child:Column(children:[
-      TextFormField(controller:code,
-      keyboardType:TextInputType.number,
-      maxLength:6,
-      decoration:const InputDecoration(labelText:'Reset code'),
-      validator:(v)=>RegExp(r'^\d{6}$').hasMatch(v??'')?null:'Enter the 6-digit code'),
+  final password=TextEditingController(),confirm=TextEditingController();
+  @override void dispose(){password.dispose();confirm.dispose();super.dispose();}
+  @override Widget build(BuildContext context)=>PageBody(title:'Choose a new password',
+    subtitle:'Mobile number verified. Complete password reset within five minutes.',children:[
+    Surface(child:Form(key:form,child:Column(children:[
+      TextFormField(controller:password,obscureText:!showPassword,
+        decoration:InputDecoration(labelText:'New password',suffixIcon:IconButton(tooltip:showPassword?'Hide password':'Show password',icon:Icon(showPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showPassword=!showPassword))),
+        validator:(v)=>(v??'').length<8||(v??'').length>128?'Use 8–128 characters':null),
       const SizedBox(height:15),
-      TextFormField(controller:password,
-      obscureText:!showPassword,
-      decoration:InputDecoration(labelText:'New password',suffixIcon:IconButton(tooltip:showPassword?'Hide password':'Show password',icon:Icon(showPassword?Icons.visibility_off_outlined:Icons.visibility_outlined),onPressed:()=>setState(()=>showPassword=!showPassword))),
-      validator:(v)=>(v??'').length<8?'Use at least 8 characters':null),
+      TextFormField(controller:confirm,obscureText:!showConfirm,
+        decoration:InputDecoration(labelText:'Confirm new password',suffixIcon:IconButton(onPressed:()=>setState(()=>showConfirm=!showConfirm),icon:Icon(showConfirm?Icons.visibility_off_outlined:Icons.visibility_outlined))),
+        validator:(v)=>v==password.text?null:'Passwords do not match'),
       const SizedBox(height:20),
       FilledButton(onPressed:busy?null:()async{
         if(!form.currentState!.validate())return;
         setState(()=>busy=true);
-        final ok=await perform(context,
-        ()async{
-          await AppScope.of(context).api.request('/v3/reset-password',
-          method:'POST',
-          body:{
-            'email':widget.email,
-            'code':code.text,
-            'new_password':password.text
-          });
-        },
-        success:'Password reset. Sign in with your new password.');
-        if(mounted){
-          setState(()=>busy=false);
-          if(ok)Navigator.of(context).popUntil((r)=>r.isFirst);
-        }
-      },
-      child:Text(busy?'Updating...':'Reset password'))
+        final api=AppScope.of(context).api;
+        final ok=await perform(context,()async{
+          await api.request('/v3/phone/reset-password',method:'POST',body:{'phone':widget.phone,'reset_token':widget.resetToken,'new_password':password.text});
+        },success:'Password reset. Sign in with your new password.');
+        if(mounted){setState(()=>busy=false);if(ok)Navigator.of(context).popUntil((r)=>r.isFirst);}
+      },child:Text(busy?'Updating…':'Reset password')),
     ])))
   ]);
 }
@@ -536,11 +553,13 @@ class _AuthField extends StatelessWidget {
   const _AuthField({required this.child});
   final Widget child;
   @override Widget build(BuildContext context)=>Theme(
-    data:Theme.of(context).copyWith(inputDecorationTheme:InputDecorationTheme(
+    data:buildPgTheme().copyWith(inputDecorationTheme:InputDecorationTheme(
       filled:true,fillColor:Colors.white,
       contentPadding:const EdgeInsets.symmetric(vertical:16,horizontal:14),
       prefixIconColor:plum,
-      hintStyle:const TextStyle(color:Color(0xFF8D7990),fontSize:15),
+      hintStyle:const TextStyle(color:Color(0xFF76657C),fontSize:15),
+      helperStyle:const TextStyle(color:Color(0xFF59445F),fontSize:12),
+      suffixIconColor:plum,
       border:OutlineInputBorder(borderRadius:BorderRadius.circular(30),borderSide:const BorderSide(color:Color(0xFFDDCEDC))),
       enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(30),borderSide:const BorderSide(color:Color(0xFFDDCEDC))),
       focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(30),borderSide:const BorderSide(color:plum,width:1.6)))),
@@ -562,7 +581,7 @@ class _AuthPrimary extends StatelessWidget {
 class _AuthWhiteFooter extends StatelessWidget {
   const _AuthWhiteFooter();
   @override
-  Widget build(BuildContext context) => const Attribution();
+  Widget build(BuildContext context) => Theme(data:buildPgTheme(),child:const Attribution());
 }
 class _AuthArtwork extends StatefulWidget {
   const _AuthArtwork({required this.asset});

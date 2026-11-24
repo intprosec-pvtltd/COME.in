@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from main import User  # initialize the application before importing its route module
 from account_deletion import owner_preview, erase
-from main import User
 from push_notifications import eligible
 
 class OneRowSession:

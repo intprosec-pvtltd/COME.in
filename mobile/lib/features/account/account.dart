@@ -20,11 +20,12 @@ class AccountPage extends StatelessWidget {
         const SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text('${p['name']}',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:17)),
-          Text('${p['email']}',style:const TextStyle(color:muted,fontSize:12)),
+          Text('${p['email']}',style:TextStyle(color:secondaryText(context),fontSize:12)),
+          if('${p['verified_login_phone']??''}'.isNotEmpty)Text('${p['verified_login_phone']} · Verified login',style:TextStyle(color:secondaryText(context),fontSize:12)),
           Text('${p['role']}',style:const TextStyle(color:lavender,fontSize:11))
         ])),
         IconButton(tooltip:'Edit profile',onPressed:()=>openPage(context,'profileEditor'),
-          icon:const Icon(Icons.edit_outlined,color:plum))
+          icon:Icon(Icons.edit_outlined,color:Theme.of(context).colorScheme.primary))
       ])),
       if(app.owner)...[
         const SectionTitle('Business settings'),
@@ -107,7 +108,9 @@ class AccountPage extends StatelessWidget {
       const SizedBox(height:16),
       TextFormField(controller:phone,
       keyboardType:TextInputType.phone,
-      decoration:const InputDecoration(labelText:'Phone')),
+      decoration:const InputDecoration(labelText:'Contact phone',helperText:'Does not change your verified login number.')),
+      if('${AppScope.of(context).profile['verified_login_phone']??''}'.isNotEmpty)
+        Padding(padding:const EdgeInsets.only(top:8),child:Text('Verified login: ${AppScope.of(context).profile['verified_login_phone']}. Contact support to change it.',style:TextStyle(color:secondaryText(context),fontSize:12))),
       const SizedBox(height:20),
       FilledButton(onPressed:busy?null:()async{
         if(!form.currentState!.validate())return;
@@ -206,7 +209,6 @@ class AccountPage extends StatelessWidget {
       'appearance'
     ]??'Light';
     return PageBody(title:'Appearance',
-    subtitle:'Deep Plum · Lavender · Blush · Soft Cream',
     children:[
       for(final mode in [
         'Light',
@@ -244,17 +246,17 @@ class _NotificationPreferencesPageState extends State<NotificationPreferencesPag
     values??={for(final k in items.keys) k:saved[k]!=false};
     return PageBody(title:'Notification preferences',subtitle:'Choose the updates you want to receive.',children:[
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const Row(children:[Icon(Icons.notifications_active_outlined,color:plum),SizedBox(width:9),
-          Expanded(child:Text('Stay informed, your way',style:TextStyle(fontWeight:FontWeight.w800,color:plum)))]),
+        Row(children:[Icon(Icons.notifications_active_outlined,color:Theme.of(context).colorScheme.primary),const SizedBox(width:9),
+          Expanded(child:Text('Stay informed, your way',style:TextStyle(fontWeight:FontWeight.w800,color:Theme.of(context).colorScheme.primary)))]),
         const SizedBox(height:7),
-        const Text('These choices control in-app alerts. Android popup, sound and background notifications require push delivery to be configured.',
-          style:TextStyle(fontSize:12,color:muted,height:1.5)),
+        Text('These choices control in-app alerts. Android popup, sound and background notifications require push delivery to be configured.',
+          style:TextStyle(fontSize:12,color:secondaryText(context),height:1.5)),
       ])),
       for(final e in items.entries) Surface(child:SwitchListTile.adaptive(
         contentPadding:EdgeInsets.zero,
-        secondary:Icon(e.value.$2,color:plum),
+        secondary:Icon(e.value.$2,color:Theme.of(context).colorScheme.primary),
         title:Text(e.value.$1,style:const TextStyle(fontSize:14,fontWeight:FontWeight.w700)),
-        subtitle:Text(e.value.$3,style:const TextStyle(fontSize:11,color:muted)),
+        subtitle:Text(e.value.$3,style:TextStyle(fontSize:11,color:secondaryText(context))),
         value:values![e.key]??true,
         onChanged:(v)=>setState(()=>values![e.key]=v),
       )),
@@ -281,7 +283,7 @@ class _NotificationPreferencesPageState extends State<NotificationPreferencesPag
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Row(children:[const Icon(Icons.apartment_outlined,color:lavender,size:32),
           const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('YOUR PG',style:TextStyle(fontSize:11,color:muted)),
+            Text('YOUR PG',style:TextStyle(fontSize:11,color:secondaryText(context))),
             Text(pgName,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))]))]),
         const Divider(height:26),
         Row(children:[Expanded(child:_AccommodationInfo(label:'Room number',value:'${room['room']??'Not assigned'}')),
@@ -298,7 +300,7 @@ class _NotificationPreferencesPageState extends State<NotificationPreferencesPag
         const SizedBox(height:12),
         _AccommodationInfo(label:'Next due date',value:last==null?'—':'${last['due_date']}'),
         const SizedBox(height:12),
-        const Text('Payments appear after confirmation.',style:TextStyle(color:muted,fontSize:12)),
+        Text('Payments appear after confirmation.',style:TextStyle(color:secondaryText(context),fontSize:12)),
       ])),
       FeatureTile(title:'Rent & receipts',subtitle:'View bills, payments and receipts',icon:Icons.receipt_long_outlined,onTap:()=>openPage(context,'rent')),
       FeatureTile(title:'Facility updates',subtitle:'Water, power, maintenance and Wi-Fi',icon:Icons.water_drop_outlined,onTap:()=>openPage(context,'facilities'))
@@ -309,7 +311,7 @@ class _AccommodationInfo extends StatelessWidget {
   const _AccommodationInfo({required this.label,required this.value});
   final String label,value;
   @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Text(label,style:const TextStyle(fontSize:12,color:muted)),
+    Text(label,style:TextStyle(fontSize:12,color:secondaryText(context))),
     const SizedBox(height:4),
     Text(value,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w700))
   ]);
@@ -374,7 +376,7 @@ class _AccommodationInfo extends StatelessWidget {
       ('How do I report an issue?',
       'Open Complaints, describe the issue and add an optional photo. You can follow updates in the request history.'),
       ('How do I recover my account?',
-      'Use Forgot password on sign-in. If email recovery is not configured, contact your PG owner or administrator.'),
+      'Use Forgot password on sign-in. Use your verified mobile number and SMS code. If mobile login is not activated, contact your PG owner or administrator.'),
       ('Who can see my messages?',
       'Community messages are restricted by the server to members of your PG. Delete for me hides a message from your account. Unsend is available to the sender within 15 minutes.')
     ])Surface(child:ExpansionTile(tilePadding:EdgeInsets.zero,
@@ -384,7 +386,7 @@ class _AccommodationInfo extends StatelessWidget {
     children:[
       Padding(padding:const EdgeInsets.symmetric(vertical:12),
       child:Text(row.$2,
-      style:const TextStyle(color:muted,
+      style:TextStyle(color:secondaryText(context),
       fontSize:12,
       height:1.6)))
     ]))
@@ -444,7 +446,7 @@ class _FirstLoginPasswordPageState extends State<FirstLoginPasswordPage> {
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Secure your new account')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(24),children:[
-      const Icon(Icons.verified_user_outlined,size:55,color:plum),
+      Icon(Icons.verified_user_outlined,size:55,color:Theme.of(context).colorScheme.primary),
       const SizedBox(height:16),
       const Text('Create your personal password',style:TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
       const SizedBox(height:8),

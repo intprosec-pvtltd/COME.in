@@ -26,12 +26,14 @@ String indiaTime(dynamic value){
   @override
   Widget build(BuildContext context) => Image.asset(
     iconOnly
-      ? 'assets/branding/stay_sync_icon_square.png'
-      : 'assets/branding/stay_sync_logo_transparent.png',
+      ? 'assets/branding/stay_sync_icon_clean.png'
+      : Theme.of(context).brightness == Brightness.dark
+        ? 'assets/branding/stay_sync_logo_dark.png'
+        : 'assets/branding/stay_sync_logo_transparent.png',
     width: width,
-    height: iconOnly ? width : width * 0.70,
+    height: iconOnly ? width : width * (Theme.of(context).brightness == Brightness.dark ? 0.78 : 0.70),
     fit: BoxFit.contain,
-    semanticLabel: 'Stay Sync - Spaces People Belong',
+    semanticLabel: 'Stay Sync – To Manage',
   );
 }
 class Attribution extends StatelessWidget {
@@ -42,9 +44,9 @@ class Attribution extends StatelessWidget {
       label:'by IntProSec, Intelligence Protection Security',
       child:Row(mainAxisAlignment:MainAxisAlignment.center,
         mainAxisSize:MainAxisSize.min,children:[
-          const Text('by',style:TextStyle(fontSize:15,color:Color(0xFF82748B),fontWeight:FontWeight.w500)),
+          Text('by',style:TextStyle(fontSize:15,color:secondaryText(context),fontWeight:FontWeight.w500)),
           const SizedBox(width:8),
-          Image.asset('assets/brand/intprosec_dark.webp',width:142,height:49,fit:BoxFit.contain,
+          Image.asset(Theme.of(context).brightness == Brightness.dark ? 'assets/brand/intprosec_on_dark.png' : 'assets/brand/intprosec_dark.webp',width:142,height:49,fit:BoxFit.contain,
             semanticLabel:'IntProSec company logo'),
         ]))));
 } class PageBody extends StatelessWidget {
@@ -71,11 +73,11 @@ class Attribution extends StatelessWidget {
     children:[
       if(subtitle!=null)Padding(padding:const EdgeInsets.only(bottom:18),
       child:Text(tr(context,subtitle!),
-      style:const TextStyle(color:muted,
+      style:TextStyle(color:secondaryText(context),
       fontSize:12))),
       ...children
     ]);
-    return Scaffold(appBar:AppBar(title:Text(tr(context,title),
+    return Scaffold(appBar:AppBar(toolbarHeight: title.isEmpty && Theme.of(context).brightness == Brightness.dark ? 48 : null, title:Text(tr(context,title),
     style:const TextStyle(fontWeight:FontWeight.w800,
     fontSize:21)),
     actions:[
@@ -152,7 +154,8 @@ class Attribution extends StatelessWidget {
       'overdue',
       'submitted'
     ].contains(status.toLowerCase());
-    final color=good?successGreen:red?const Color(0xFFB94D64):const Color(0xFFAE7148);
+    final dark=Theme.of(context).brightness==Brightness.dark;
+    final color=dark?(good?const Color(0xFF82E0BE):red?const Color(0xFFFFB4BB):const Color(0xFFFFCB99)):(good?successGreen:red?const Color(0xFFB94D64):const Color(0xFFAE7148));
     return Container(padding:const EdgeInsets.symmetric(horizontal:9,
     vertical:5),
     decoration:BoxDecoration(color:color.withValues(alpha:.12),
@@ -232,8 +235,8 @@ class Attribution extends StatelessWidget {
       style:const TextStyle(fontWeight:FontWeight.w800,
       fontSize:13)),
       if(subtitle.isNotEmpty)Text(tr(context,subtitle),
-      style:const TextStyle(fontSize:11,
-      color:muted))
+      style:TextStyle(fontSize:11,
+      color:secondaryText(context)))
     ])),
     const Icon(Icons.chevron_right,
     size:19)
@@ -254,7 +257,7 @@ class Attribution extends StatelessWidget {
     const SizedBox(height:12),
     Text(tr(context,message),
     textAlign:TextAlign.center,
-    style:const TextStyle(color:muted)),
+    style:TextStyle(color:secondaryText(context))),
     if(action!=null)...[
       const SizedBox(height:15),
       action!

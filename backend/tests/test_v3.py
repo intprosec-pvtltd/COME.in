@@ -1,5 +1,7 @@
 import os,sys,tempfile,uuid
 from pathlib import Path
+import os as _legacy_test_os
+_legacy_test_os.environ['ALLOW_LEGACY_EMAIL_REGISTRATION']='true'
 os.environ['DATABASE_URL']='sqlite:///'+str(Path(tempfile.mkdtemp())/'tests.db')
 os.environ['SECRET_KEY']='integration-test-key-at-least-32-characters'
 os.environ['DEMO_SEED']='true'
@@ -155,7 +157,8 @@ def test_in_app_reminder(owner,resident):
 def test_phone_login_after_profile_update():
  email='phone-'+uuid.uuid4().hex+'@test.pg';phone='919876001234'
  r=client.post('/api/v3/register',json={'name':'Phone Owner','email':email,'phone':phone,'password':'Phone123!','role':'owner','property_name':'Phone PG'});assert r.status_code==201
- assert req('GET','/v3/state',login(phone,'Phone123!'))['profile']['email']==email
+ assert client.post('/api/login',json={'email':phone,'password':'Phone123!'}).status_code==401
+ assert req('GET','/v3/state',login(email,'Phone123!'))['profile']['email']==email
 
 def test_other_tenant_cannot_read_private_proof(resident):
  f=client.post('/api/v3/files/payment',headers=resident,files={'file':('proof.pdf',b'%PDF-1.4 private','application/pdf')});assert f.status_code==201

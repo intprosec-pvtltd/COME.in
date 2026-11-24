@@ -71,8 +71,24 @@ class AppController extends ChangeNotifier {
     'System'=>ThemeMode.system,
     _=>ThemeMode.light
   };
+  // Pre-authentication screens always retain their original light appearance.
+  ThemeMode get effectiveThemeMode => restoring || !onboardingSeen || !signedIn ||
+      profile['must_change_password'] == true ? ThemeMode.light : themeMode;
+  // UI-only hint, scoped to the API environment. The server still verifies
+  // every login and activation; this is never an authentication credential.
+  String get _verifiedHintKey => 'verified_mobile_hints:${api.baseUrl}';
+  List<String> _verifiedMobileHints = [];
+  String? get lastVerifiedMobile => _verifiedMobileHints.isEmpty ? null : _verifiedMobileHints.first;
+  bool isKnownVerifiedMobile(String? number) => number != null && _verifiedMobileHints.contains(number);
+  Future<void> rememberVerifiedMobile(String number) async {
+    _verifiedMobileHints = [number, ..._verifiedMobileHints.where((n) => n != number)].take(20).toList();
+    try {
+      await (await SharedPreferences.getInstance()).setStringList(_verifiedHintKey, _verifiedMobileHints);
+    } catch (_) { /* A local hint failure must not invalidate a successful login. */ }
+  }
   Future<void> initialize() async {
     final prefs=await SharedPreferences.getInstance();
+    _verifiedMobileHints=prefs.getStringList(_verifiedHintKey)??[];
     onboardingSeen=prefs.getBool('onboarding_seen')??false;
     final code=prefs.getString('language_code')??'en';
     languageCode=['en','hi','ta','te','kn','ml'].contains(code)?code:'en';
@@ -95,13 +111,13 @@ class AppController extends ChangeNotifier {
     await (await SharedPreferences.getInstance()).setBool('onboarding_seen',
     true);
     notifyListeners();
-  } Future<void> login(String email,
+  } Future<void> login(String phone,
   String password,
   bool remember) async {
-    final result=await api.request('/login',
+    final result=await api.request('/v3/phone/login',
     method:'POST',
     body:{
-      'email':email,
+      'phone':phone,
       'password':password
     });
     api.token=result[
@@ -110,6 +126,7 @@ class AppController extends ChangeNotifier {
     if(api.token==null)throw const ApiException(0,
     'No session returned');
     try{
+      await rememberVerifiedMobile(phone);
       await refresh();
       if(remember)await sessions.saveToken(api.token!);
       else await sessions.clear();

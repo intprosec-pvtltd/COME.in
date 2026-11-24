@@ -15,7 +15,7 @@ router = APIRouter(tags=['Account erasure'])
 
 # Only empty, pure access/assignment data is safe to delete with an account.
 _SAFE_ROWS = {'platform_user_access', 'platform_resident_assignments',
-              'platform_billing_exclusions', 'staysync_push_devices'}
+              'platform_billing_exclusions', 'staysync_push_devices', 'staysync_verified_phones', 'staysync_phone_reset_grants'}
 # These documents store account-local preferences/metadata, not content history.
 _SAFE_DOCUMENT_KINDS = {'profile', 'onboarding', 'resident_meta', 'security', 'staff_meta'}
 

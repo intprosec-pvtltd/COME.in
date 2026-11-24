@@ -149,7 +149,7 @@ def health():return {'status':'ok','version':'0.1.0'}
 @app.post('/api/login')
 def login(data:Credentials,session:Session=Depends(db)):
  u=session.scalar(select(User).where(User.email==data.email.strip().lower()))
- if not u and 'lookup_phone' in globals():u=lookup_phone(session,data.email)
+ # Verified phone login is available only on /api/v3/phone/login (rate limited).
  if not u or not passwords.verify(data.password,u.password_hash):raise HTTPException(401,'Invalid credentials')
  if not _platform_user_enabled(session,u.id):raise HTTPException(403,'Account disabled by platform administrator')
  if 'meta' in globals():
@@ -305,3 +305,8 @@ def start_staysync_trial_reminders():
 # STAYSYNC_PHASE2_SUBSCRIPTION_MOUNT
 from subscription_integration import mount_subscription_router
 mount_subscription_router()
+
+# Additive mobile authentication; legacy web API remains available.
+from phone_auth import router as phone_router
+app.include_router(phone_router)
+Base.metadata.create_all(engine)

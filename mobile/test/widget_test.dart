@@ -15,7 +15,7 @@ class FakeApi extends ApiClient {
     Map<String,
     dynamic>? body
   })async {
-    if(path=='/login')return {
+    if(path=='/v3/phone/login')return {
       'token':'test'
     };
     if(path=='/v3/state')return fixture;
@@ -118,7 +118,7 @@ AppController controller(String? role){
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter your email or phone'),
+    expect(find.text('Enter a valid mobile number'),
     findsOneWidget);
     expect(find.text('Enter your password'),
     findsOneWidget);

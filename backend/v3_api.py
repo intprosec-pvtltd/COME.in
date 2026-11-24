@@ -104,7 +104,9 @@ def security_check(u,payload,authorization,session):
 def profile_out(s,u):
  from identity_api import photo_revision
  t=s.get(Tenant,u.tenant_id);prefs=meta(s,u.tenant_id,'profile',u.id)
- return {'id':u.id,'name':u.name,'email':u.email,'role':u.role,'room':u.room,'phone':prefs.get('phone',''),'photo_revision':photo_revision(s,u.tenant_id,'user',u.id),'preferences':prefs,'must_change_password':bool(meta(s,u.tenant_id,'onboarding',u.id).get('must_change',False)),'tenant':{'id':t.id,'name':t.name}}
+ from phone_auth import VerifiedPhone
+ verified=s.get(VerifiedPhone,u.id)
+ return {'id':u.id,'name':u.name,'email':u.email,'role':u.role,'room':u.room,'phone':prefs.get('phone',''),'verified_login_phone':verified.phone if verified else '', 'photo_revision':photo_revision(s,u.tenant_id,'user',u.id),'preferences':prefs,'must_change_password':bool(meta(s,u.tenant_id,'onboarding',u.id).get('must_change',False)),'tenant':{'id':t.id,'name':t.name}}
 @router.get('/profile')
 def profile(u:User=Depends(current),s:Session=Depends(db)):return profile_out(s,u)
 @router.patch('/profile')
@@ -143,6 +145,8 @@ class Registration(BaseModel):
  joining_code:str=''
 @router.post('/register',status_code=201)
 def register(data:Registration,s:Session=Depends(db)):
+ # Explicit migration-only escape hatch for older clients; new registrations require verified mobile.
+ if os.getenv('ALLOW_LEGACY_EMAIL_REGISTRATION','false').lower()!='true':raise HTTPException(410,'Update Stay Sync and register using a verified mobile number.')
  email=safe_email(data.email)
  if s.scalar(select(User).where(User.email==email)):raise HTTPException(409,'Email is already registered')
  if data.role!='owner':raise HTTPException(403,'Residents must be invited by their PG owner.')
@@ -293,6 +297,8 @@ def send_recovery_email(email,code):
 def forgot(data:RecoveryRequest,s:Session=Depends(db)):
  if not ((os.getenv('MAILJET_API_KEY') and os.getenv('MAILJET_SECRET_KEY') and os.getenv('MAILJET_FROM_EMAIL')) or ((os.getenv('RESEND_API_KEY') or os.getenv('SMTP_HOST')) and (os.getenv('RESET_EMAIL_FROM') or os.getenv('SMTP_FROM') or os.getenv('SMTP_USER')))):raise HTTPException(503,'Email recovery is not configured. Contact your PG administrator.')
  email=safe_email(data.email);u=s.scalar(select(User).where(User.email==email))
+ from phone_auth import VerifiedPhone
+ if u and s.get(VerifiedPhone,u.id):u=None # Verified accounts recover only via mobile OTP.
  if u:
   old=meta(s,u.tenant_id,'recovery',u.id)
   if now().timestamp()-old.get('requested_at',0)<60:raise HTTPException(429,'Wait a minute before requesting another code.')
@@ -304,6 +310,8 @@ def forgot(data:RecoveryRequest,s:Session=Depends(db)):
 @router.post('/reset-password')
 def reset_password(data:ResetRequest,s:Session=Depends(db)):
  u=s.scalar(select(User).where(User.email==safe_email(data.email)))
+ from phone_auth import VerifiedPhone
+ if u and s.get(VerifiedPhone,u.id):u=None
  md=meta(s,u.tenant_id,'recovery',u.id) if u else {}
  if not u or md.get('expires',0)<now().timestamp() or md.get('attempts',0)>=5:raise HTTPException(400,'The reset code is invalid or expired.')
  if not secrets.compare_digest(md.get('digest',''),recovery_digest(data.code)):
@@ -348,7 +356,7 @@ def chat_rows(s,u,property_id=None):
   if u.id in md.get('hidden_by',[]):continue
   pid=int(md.get('property_id',0))
   if not visible_property(s,u,pid) or (property_id is not None and pid!=property_id):continue
-  out.append({'property_id':pid,'id':m.id,'author_id':m.author_id,'author':names.get(m.author_id,'Former member'),'author_phone':meta(s,u.tenant_id,'profile',m.author_id).get('phone','') if m.author_id in members else '', 'author_room':members[m.author_id].room if m.author_id in members and members[m.author_id].role=='resident' else '', 'body':'' if m.deleted else m.body,'deleted':bool(m.deleted),'created_at':iso(m.created_at),'edited':md.get('edited',False),'reply':md.get('reply',''),'attachments':[] if m.deleted else [{'id':a.id,'filename':a.filename,'content_type':a.content_type,'url':f'/api/community/attachments/{a.id}'} for a in s.scalars(select(ChatAttachment).where(ChatAttachment.message_id==m.id,ChatAttachment.tenant_id==u.tenant_id))]})
+  out.append({'property_id':pid,'id':m.id,'author_id':m.author_id,'author':names.get(m.author_id,'Former member'),'author_phone':meta(s,u.tenant_id,'profile',m.author_id).get('phone','') if m.author_id in members else '', 'author_role':members[m.author_id].role if m.author_id in members else '', 'author_room':members[m.author_id].room if m.author_id in members and members[m.author_id].role=='resident' else '', 'body':'' if m.deleted else m.body,'deleted':bool(m.deleted),'created_at':iso(m.created_at),'edited':md.get('edited',False),'reply':md.get('reply',''),'attachments':[] if m.deleted else [{'id':a.id,'filename':a.filename,'content_type':a.content_type,'url':f'/api/community/attachments/{a.id}'} for a in s.scalars(select(ChatAttachment).where(ChatAttachment.message_id==m.id,ChatAttachment.tenant_id==u.tenant_id))]})
  return out[-200:]
 
 class RoomTransferInput(BaseModel):
@@ -820,10 +828,11 @@ def download(identifier:int,u:User=Depends(current),s:Session=Depends(db)):
  return FileResponse(path,media_type=f.mime,filename=f.filename)
 
 def lookup_phone(s,value):
- normalized=re.sub(r'\D','',value)
- if not normalized:return None
- matches=[s.get(User,d.key) for d in s.scalars(select(Document).where(Document.kind=='profile')) if re.sub(r'\D','',str(d.payload.get('phone','')))==normalized]
- return matches[0] if len(matches)==1 else None
+ from phone_auth import normalize_phone, binding
+ try: phone=normalize_phone(value)
+ except HTTPException: return None
+ record=binding(s,phone)
+ return s.get(User,record.user_id) if record else None
 
 @router.post('/reminders/{resident_id}')
 def rent_reminder(resident_id:int,u:User=Depends(current),s:Session=Depends(db)):

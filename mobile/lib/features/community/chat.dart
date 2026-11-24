@@ -9,6 +9,37 @@ import '../../app/router.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
 import '../finance/finance.dart';
+/// Stable across app runs and independent of name, message order or theme.
+/// A finite accessible palette can repeat for large groups; the user ID, name
+/// and verified role remain the authoritative identifiers.
+Color communitySenderColor(Object? id, Brightness brightness) {
+  const dark = <Color>[
+    Color(0xFFFFB4AB), Color(0xFF91D6FF), Color(0xFF86E1B8), Color(0xFFE7BBFF),
+    Color(0xFFFFD18C), Color(0xFFA7D8F5), Color(0xFFF9B2DA), Color(0xFFCAEB91),
+    Color(0xFFB8C3FF), Color(0xFFFFC0A1), Color(0xFF91E5E3), Color(0xFFE4CBFF),
+    Color(0xFFF6D975), Color(0xFFD1EEB2), Color(0xFFF4B9BB), Color(0xFFAAC9FF),
+  ];
+  const light = <Color>[
+    Color(0xFF8D2424), Color(0xFF174F84), Color(0xFF00623E), Color(0xFF663184),
+    Color(0xFF805000), Color(0xFF005A73), Color(0xFF85235D), Color(0xFF3F5D13),
+    Color(0xFF354B9B), Color(0xFF963B16), Color(0xFF005E59), Color(0xFF583A8F),
+    Color(0xFF725500), Color(0xFF426020), Color(0xFF852D47), Color(0xFF2F5196),
+  ];
+  final key = '$id';
+  // Numeric server IDs give neighboring users distinct slots. Stable string
+  // fallback covers migrated data without depending on Dart's runtime hashCode.
+  var hash = int.tryParse(key) ?? 0;
+  if (int.tryParse(key) == null) {
+    for (final ch in key.codeUnits) { hash = (hash * 31 + ch) & 0x7fffffff; }
+  }
+  final palette = brightness == Brightness.dark ? dark : light;
+  return palette[hash.abs() % palette.length];
+}
+
+String? communityRoleLabel(Object? role) => switch (role) {
+  'owner' => 'Owner', 'manager' => 'Manager', 'staff' => 'Staff', _ => null,
+};
+
 class ChatPage extends StatefulWidget {
   const ChatPage({
     super.key
@@ -18,6 +49,7 @@ class ChatPage extends StatefulWidget {
   final input=TextEditingController(),
   scroll=ScrollController();
   Timer? timer;
+  bool tabVisible=true;
   AppController? app;
   List<Map<String,
   dynamic>> messages=[
@@ -38,6 +70,10 @@ class ChatPage extends StatefulWidget {
     WidgetsBinding.instance.addObserver(this);
   } @override void didChangeDependencies(){
     super.didChangeDependencies();
+    final wasVisible=tabVisible;
+    tabVisible=TickerMode.valuesOf(context).enabled;
+    if(!tabVisible){timer?.cancel();}
+    else if(!wasVisible&&app!=null){startTimer();Future.microtask(()=>load());}
     if(app==null){
       app=AppScope.of(context);
       messages=app!.rows('messages').where((m)=>(m['property_id']??0)==communityPropertyId).toList();
@@ -46,6 +82,7 @@ class ChatPage extends StatefulWidget {
     }
   } void startTimer(){
     timer?.cancel();
+    if(!tabVisible)return;
     timer=Timer.periodic(const Duration(seconds:5),
     (_)=>load());
   } @override void didChangeAppLifecycleState(AppLifecycleState state){
@@ -64,7 +101,7 @@ class ChatPage extends StatefulWidget {
   } Future<void> load({
     bool forceScroll=false
   })async{
-    if(polling)return;
+    if(!mounted||!tabVisible||polling)return;
     polling=true;
     final requestedProperty=communityPropertyId;
     final nearEnd=!scroll.hasClients||scroll.position.maxScrollExtent-scroll.offset<100;
@@ -219,9 +256,9 @@ class ChatPage extends StatefulWidget {
       title:Text(choice.$1),
       onTap:()=>Navigator.pop(c,
       choice.$1)),
-      const Padding(padding:EdgeInsets.all(15),
+      Padding(padding:const EdgeInsets.all(15),
       child:Text('Images, PDF and TXT · Up to 10 MB',
-      style:TextStyle(color:muted,
+      style:TextStyle(color:secondaryText(c),
       fontSize:11)))
     ])));
     if(!mounted)return;
@@ -272,9 +309,9 @@ class ChatPage extends StatefulWidget {
       title:const Text('Delete for me'),
       onTap:()=>Navigator.pop(c,
       'delete')),
-      const Padding(padding:EdgeInsets.all(16),
+      Padding(padding:const EdgeInsets.all(16),
       child:Text('Edit and unsend are available for 15 minutes.',
-      style:TextStyle(color:muted,
+      style:TextStyle(color:secondaryText(c),
       fontSize:11)))
     ])));
     if(!mounted)return;
@@ -321,9 +358,9 @@ class ChatPage extends StatefulWidget {
         )else Text('${a.data['accommodation']?['property']??a.profile['tenant']?['name']??'PG community'}',
         style:const TextStyle(fontSize:15,
         fontWeight:FontWeight.w800)),
-        const Text('Private community',
+        Text('Private community',
         style:TextStyle(fontSize:10,
-        color:muted))
+        color:secondaryText(context)))
       ]))
     ]),
     actions:[
@@ -383,32 +420,38 @@ class ChatPage extends StatefulWidget {
           'attachments'
         ]as List? ?? [
         ];
+        final theme=Theme.of(c);
+        final senderColor=communitySenderColor(m['author_id'],theme.brightness);
+        final senderRole=communityRoleLabel(m['author_role']);
         final date='${m['created_at']}'.split('T').first;
         final previousDate=i==0?'':'${messages[i-1]['created_at']}'.split('T').first;
         return Column(children:[
           if(date!=previousDate)Padding(padding:const EdgeInsets.only(top:8,
           bottom:15),
-          child:StatusPill(date)),
+          child:Theme.of(c).brightness == Brightness.dark ? Chip(label: Text(date,
+            style: TextStyle(fontSize: 10, color: secondaryText(c))), visualDensity: VisualDensity.compact) : StatusPill(date)),
           Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,
           child:GestureDetector(onLongPress:()=>actions(m),
           child:ConstrainedBox(constraints:BoxConstraints(maxWidth:MediaQuery.sizeOf(c).width*.84),
           child:Container(margin:const EdgeInsets.only(bottom:12),
-          padding:const EdgeInsets.fromLTRB(13,
-          10,
-          10,
-          6),
-          decoration:BoxDecoration(color:mine?lavender.withValues(alpha:.26):Theme.of(c).cardColor,
+          padding:const EdgeInsets.fromLTRB(12,8,10,4),
+          decoration:BoxDecoration(color:mine?(theme.brightness==Brightness.dark?const Color(0xFF403355):const Color(0xFFF0E5FF)):theme.cardColor,
           borderRadius:BorderRadius.only(topLeft:const Radius.circular(17),
           topRight:const Radius.circular(17),
           bottomLeft:Radius.circular(mine?17:4),
           bottomRight:Radius.circular(mine?4:17)),
           border:Border.all(color:lavender.withValues(alpha:.12))),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+          child:Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment:CrossAxisAlignment.start,
           children:[
-            Text('${m['author']}${'${m['author_room']??''}'.trim().isNotEmpty ? ' · Room ${m['author_room']}' : ''}',
-            style:const TextStyle(fontSize:10,
-            color:lavender,
-            fontWeight:FontWeight.w800)),
+            Wrap(crossAxisAlignment:WrapCrossAlignment.center,spacing:6,runSpacing:3,children:[
+              Text('${m['author']}${'${m['author_room']??''}'.trim().isNotEmpty ? ' · Room ${m['author_room']}' : ''}',
+                style:TextStyle(fontSize:12,color:senderColor,fontWeight:FontWeight.w800)),
+              if(senderRole!=null)Container(
+                padding:const EdgeInsets.symmetric(horizontal:7,vertical:3),
+                decoration:BoxDecoration(color:senderColor.withValues(alpha:.10),
+                  border:Border.all(color:senderColor.withValues(alpha:.55)),borderRadius:BorderRadius.circular(6)),
+                child:Text(senderRole,style:TextStyle(fontSize:10,color:senderColor,fontWeight:FontWeight.w700))),
+            ]),
             if('${m['reply']??''}'.isNotEmpty)Container(margin:const EdgeInsets.symmetric(vertical:7),
             padding:const EdgeInsets.all(8),
             decoration:BoxDecoration(color:lavender.withValues(alpha:.12),
@@ -417,11 +460,11 @@ class ChatPage extends StatefulWidget {
             child:Text('${m['reply']}',
             style:const TextStyle(fontSize:10))),
             const SizedBox(height:4),
-            Text(m[
+            if (attachments.isEmpty || !'${m['body']}'.startsWith('Attachment:')) Text(m[
               'deleted'
             ]==true?'This message was unsent':attachments.isNotEmpty && '${m['body']}'.startsWith('Attachment:') ? '' : '${m['body']}',
             style:TextStyle(fontSize:13,
-            height:1.5,
+            height:1.35,
             fontStyle:m[
               'deleted'
             ]==true?FontStyle.italic:FontStyle.normal)),
@@ -433,17 +476,17 @@ class ChatPage extends StatefulWidget {
             Row(mainAxisSize:MainAxisSize.min,
             children:[
               Text('${indiaTime(m['created_at'])}${m['edited']==true?' · edited':''}',
-              style:const TextStyle(fontSize:9,
-              color:muted)),
+              style:TextStyle(fontSize:10,
+              color:secondaryText(c))),
               IconButton(tooltip:'Message actions',
               visualDensity:VisualDensity.compact,
               constraints:const BoxConstraints(minWidth:30,
               minHeight:28),
               padding:EdgeInsets.zero,
               onPressed:()=>actions(m),
-              icon:const Icon(Icons.more_horiz,
+              icon:Icon(Icons.more_horiz,
               size:17,
-              color:muted))
+              color:secondaryText(c)))
             ])
           ])))))
         ]);
@@ -500,27 +543,34 @@ class ChatPage extends StatefulWidget {
   @override State<PrivateChatAttachment> createState()=>_PrivateChatAttachmentState();
 } class _PrivateChatAttachmentState extends State<PrivateChatAttachment>{
   Future<Uint8List>? bytes;
+  bool get isImage => '${widget.file['content_type']}'.toLowerCase().startsWith('image/');
+  Future<Uint8List> fetch()=>AppScope.of(context).api.download('${widget.file['url']}');
   @override void didChangeDependencies(){
     super.didChangeDependencies();
-    if('${widget.file['content_type']}'.startsWith('image/'))bytes??=AppScope.of(context).api.download('${widget.file['url']}');
-  }@override Widget build(BuildContext context)=>InkWell(onTap:()=>showFile(context,
-  '${widget.file['url']}',
-  '${widget.file['filename']}',
-  image:'${widget.file['content_type']}'.startsWith('image/')),
-  child:Padding(padding:const EdgeInsets.symmetric(vertical:8),
-  child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-  children:[
-    if(bytes!=null)FutureBuilder<Uint8List>(future:bytes,
-    builder:(c,
-    s)=>s.hasData?ClipRRect(borderRadius:BorderRadius.circular(12),
-    child:Image.memory(s.data!,
-    height:150,
-    fit:BoxFit.cover)):s.hasError?const Icon(Icons.broken_image_outlined):const Padding(padding:EdgeInsets.all(18),
-    child:CircularProgressIndicator()))else const Icon(Icons.description_outlined,
-    color:lavender),
-    const SizedBox(height:5),
-    const Row(mainAxisSize:MainAxisSize.min, children:[Icon(Icons.download_outlined,size:15,color:lavender), SizedBox(width:5), Text('View / save attachment',style:TextStyle(fontSize:11,color:lavender))])
-  ])));
+    if(isImage)bytes??=fetch();
+  }
+  @override void didUpdateWidget(covariant PrivateChatAttachment oldWidget){
+    super.didUpdateWidget(oldWidget);
+    if(oldWidget.file['url']!=widget.file['url']||oldWidget.file['content_type']!=widget.file['content_type']){
+      bytes=isImage?fetch():null;
+    }
+  }
+  Widget unavailable()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text('Image preview unavailable',style:TextStyle(fontSize:12,color:secondaryText(context))),
+    TextButton.icon(onPressed:()=>setState(()=>bytes=fetch()),icon:const Icon(Icons.refresh,size:16),label:const Text('Retry preview')),
+  ]);
+  @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.symmetric(vertical:6),
+    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      if(isImage)FutureBuilder<Uint8List>(future:bytes,builder:(c,s){
+        if(s.hasError)return unavailable();
+        if(!s.hasData)return const SizedBox(height:44,width:44,child:Padding(padding:EdgeInsets.all(10),child:CircularProgressIndicator(strokeWidth:2)));
+        return ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.memory(s.data!,height:150,
+          fit:BoxFit.contain,cacheWidth:640,errorBuilder:(_,error,stack)=>unavailable()));
+      })else const Icon(Icons.description_outlined),
+      Text('${widget.file['filename']??'Attachment'}',maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:12,color:secondaryText(context))),
+      TextButton.icon(onPressed:()=>showFile(context,'${widget.file['url']}','${widget.file['filename']}',image:isImage),
+        icon:const Icon(Icons.download_outlined,size:16),label:const Text('View / save attachment')),
+    ]));
  } class GroupInfoPage extends StatefulWidget {
   const GroupInfoPage({super.key, required this.propertyId});
   final int propertyId;
@@ -538,8 +588,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     return PageBody(title:'Community information',children:[
       const Center(child:OfficialBrand(width:90,iconOnly:true)),
       const SizedBox(height:20),
-      const Text('Share useful updates and keep conversations respectful. Report maintenance through Complaints so it can be tracked.',
-        style:TextStyle(color:muted,fontSize:12,height:1.6)),
+      Text('Share useful updates and keep conversations respectful. Report maintenance through Complaints so it can be tracked.',
+        style:TextStyle(color:secondaryText(context),fontSize:12,height:1.6)),
       const SectionTitle('Members'),
       FutureBuilder<List<Map<String,dynamic>>>(future:members,builder:(ctx,snapshot){
         if(snapshot.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());

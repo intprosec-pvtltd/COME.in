@@ -51,10 +51,10 @@ class ComplaintsPage extends StatefulWidget {
         Text('${r['description']}',
         maxLines:2,
         overflow:TextOverflow.ellipsis,
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:12)),
         const SizedBox(height:8),
-        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(r['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']} · Complaint #${r['id']}',style:const TextStyle(color:muted,fontSize:11)),
+        Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(r['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']} · Complaint #${r['id']}',style:TextStyle(color:secondaryText(context),fontSize:11)),
         const SizedBox(height:10),
         Text('${r['priority']??'Medium'} priority',
         style:const TextStyle(fontSize:10,
@@ -204,7 +204,7 @@ class ComplaintsPage extends StatefulWidget {
         Text('${t['description']}'),
         const SizedBox(height:12),
         Text('${t['priority']??'Medium'} priority',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:12)),
         if(t[
           'file_id'
@@ -282,7 +282,7 @@ class ComplaintsPage extends StatefulWidget {
         const SizedBox(height:6),
         Text('${h['note']}'),
         Text(friendlyDate(h['at']),
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:10))
       ]))
     ]);
@@ -324,12 +324,12 @@ class ComplaintsPage extends StatefulWidget {
           StatusPill('${f['status']}')
         ]),
         const SizedBox(height:12),
-        Row(children:[const Icon(Icons.apartment_rounded,size:19,color:plum),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(f['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))]),
+        Row(children:[Icon(Icons.apartment_rounded,size:19,color:Theme.of(context).colorScheme.primary),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(f['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:14,fontWeight:FontWeight.w700)))]),
         const SizedBox(height:8),
         Text('${f['details']}',
         style:const TextStyle(fontSize:12)),
         Text('${f['category']}',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:10)),
         if((f[
           'history'
@@ -386,12 +386,12 @@ class ComplaintsPage extends StatefulWidget {
           ]==true)const StatusPill('Important')
         ]),
         const SizedBox(height:12),
-        Row(children:[const Icon(Icons.apartment_rounded,size:19,color:plum),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))]),
+        Row(children:[Icon(Icons.apartment_rounded,size:19,color:Theme.of(context).colorScheme.primary),const SizedBox(width:8),Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:14,fontWeight:FontWeight.w700)))]),
         const SizedBox(height:8),
         Text('${n['body']}',
         maxLines:3,
         overflow:TextOverflow.ellipsis,
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:12)),
         const SizedBox(height:10),
         Text(n[
@@ -440,13 +440,13 @@ class ComplaintsPage extends StatefulWidget {
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
       children:[
         Row(children:[
-          const Icon(Icons.apartment_rounded,color:plum,size:22),
+          Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:22),
           const SizedBox(width:9),
           Expanded(child:Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.profile['tenant']?['name']??app.data['accommodation']?['property']??'Primary PG'})['name']}',
-            style:const TextStyle(fontSize:15,fontWeight:FontWeight.w800,color:plum))),
+            style:TextStyle(fontSize:15,fontWeight:FontWeight.w800,color:Theme.of(context).colorScheme.primary))),
         ]),
         const SizedBox(height:6),
-        const Text('Posted by your PG owner',style:TextStyle(color:muted,fontSize:12)),
+        Text('Posted by your PG owner',style:TextStyle(color:secondaryText(context),fontSize:12)),
         const Divider(height:25),
         if(n[
           'important'
@@ -456,7 +456,7 @@ class ComplaintsPage extends StatefulWidget {
         style:const TextStyle(height:1.7)),
         const SizedBox(height:20),
         Text(friendlyDate(n['created_at']),
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:10))
       ])),
       if(app.owner)... [
@@ -595,12 +595,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
           style:TextStyle(fontWeight:n[
             'read'
           ]==true?FontWeight.w500:FontWeight.w800)),
-          if(n['property_id']!=null)Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:const TextStyle(fontSize:10,color:muted)),
+          if(n['property_id']!=null)Text('PG: ${app.rows('properties').firstWhere((p)=>p['id']==(n['property_id']??0),orElse:()=>{'name':app.data['accommodation']?['property']??app.profile['tenant']?['name']??'Primary PG'})['name']}',style:TextStyle(fontSize:10,color:secondaryText(context))),
           Text('${n['body']}',
-          style:const TextStyle(color:muted,
+          style:TextStyle(color:secondaryText(context),
           fontSize:11)),
           Text(friendlyDate(n['created_at']),
-          style:const TextStyle(color:muted,
+          style:TextStyle(color:secondaryText(context),
           fontSize:9))
         ])),
         if(n[

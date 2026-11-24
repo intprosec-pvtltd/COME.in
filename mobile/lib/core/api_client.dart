@@ -8,10 +8,10 @@ import 'package:http_parser/http_parser.dart';
 
 /// Compile-time endpoint. For a USB-connected physical device use
 /// --dart-define=API_URL=http://127.0.0.1:8000 with adb reverse tcp:8000.
-/// The default remains Android emulator-only for backward compatibility.
+/// The production default is the existing hosted API; local builds must override it.
 const apiBase = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'http://10.0.2.2:8000',
+  defaultValue: 'https://come-in.onrender.com',
 );
 
 class ApiException implements Exception {
@@ -26,6 +26,7 @@ class ApiClient {
   ApiClient({this.token, String? baseUrl}) : _baseUrl = baseUrl ?? apiBase;
   String? token;
   final String _baseUrl;
+  String get baseUrl => _baseUrl;
 
   Uri _uri(String path) => Uri.parse(
     '$_baseUrl${path.startsWith('/api/') ? path : '/api$path'}',

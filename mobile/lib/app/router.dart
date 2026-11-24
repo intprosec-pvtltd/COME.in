@@ -1,5 +1,6 @@
 import '../core/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'controller.dart';
 import '../core/design.dart';
 import '../core/api_client.dart';
@@ -140,6 +141,26 @@ class AppShell extends StatefulWidget {
   @override State<AppShell> createState()=>_AppShellState();
 } class _AppShellState extends State<AppShell>{
   int tab=0;
+  final List<int> _history = [];
+  final Set<String> _visited = {};
+  bool _confirmingExit = false;
+  Future<void> _back() async {
+    if (_history.isNotEmpty) {
+      setState(() => tab = _history.removeLast());
+      return;
+    }
+    if (_confirmingExit) return;
+    _confirmingExit = true;
+    try {
+      final exit = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+        title: const Text('Exit Stay Sync?'),
+        content: const Text('Do you want to close the application?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Exit'))]));
+      if (exit == true && mounted) await SystemNavigator.pop();
+    } finally { _confirmingExit = false; }
+  }
+
   bool refreshing=false;
   @override Widget build(BuildContext context){
     final app=AppScope.of(context);
@@ -161,11 +182,13 @@ class AppShell extends StatefulWidget {
       'community',
       'account'
     ];
-    if(tab>=destinations.length)tab=0;
-    final page=destinations[
-      tab
-    ];
-    return Scaffold(body:Column(children:[
+    if(tab>=destinations.length) { tab=0; _history.clear(); }
+    _history.removeWhere((i) => i >= destinations.length);
+    final page=destinations[tab];
+    _visited.add(page);
+    _visited.removeWhere((p)=>!destinations.contains(p));
+    return PopScope(canPop: false, onPopInvokedWithResult: (didPop, result) { if (!didPop) _back(); },
+    child: Scaffold(body:Column(children:[
       if(refreshing)const LinearProgressIndicator(),
       Expanded(child:app.error!=null?Center(child:Column(mainAxisSize:MainAxisSize.min,
       children:[
@@ -173,11 +196,14 @@ class AppShell extends StatefulWidget {
         TextButton(onPressed:()=>perform(context,
         app.refresh),
         child:const Text('Retry'))
-      ])):pageFor(page))
+      ])):IndexedStack(index:tab,children:[
+        for(final destination in destinations) KeyedSubtree(key:ValueKey(destination),
+          child:TickerMode(enabled:destination==page,child:_visited.contains(destination)?pageFor(destination):const SizedBox.shrink()))
+      ]))
     ]),
     bottomNavigationBar:NavigationBar(selectedIndex:tab,
     onDestinationSelected:(i)async{
-      setState(()=>tab=i);
+      if (i != tab) setState(() { _history.add(tab); tab=i; });
       if(i==0&&!refreshing){
         setState(()=>refreshing=true);
         await perform(context,
@@ -202,6 +228,6 @@ class AppShell extends StatefulWidget {
         'complaints'=>'Tasks',
         _=>owner?'Account':'Profile'
       }))
-    ]));
+    ])));
   }
 }

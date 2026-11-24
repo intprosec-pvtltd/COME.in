@@ -142,17 +142,17 @@ dynamic>> scopedInvoices(AppController app){
         if(app.owner)...[
           const SizedBox(height:7),
           Row(children:[
-            const Icon(Icons.apartment_rounded, size:19, color:plum),
+            Icon(Icons.apartment_rounded, size:19, color:Theme.of(context).colorScheme.primary),
             const SizedBox(width:6),
             Expanded(child:Text(
               pgNameForResident(app, app.find('residents', (i['resident_id'] as num?)?.toInt())),
-              style:const TextStyle(fontSize:14, color:plum, fontWeight:FontWeight.w700),
+              style:TextStyle(fontSize:14, color:Theme.of(context).colorScheme.primary, fontWeight:FontWeight.w700),
             )),
           ]),
         ],
         const SizedBox(height:12),
         Text(tr(context,'Amount paid'),
-          style:const TextStyle(fontSize:12,color:muted,fontWeight:FontWeight.w600)),
+          style:TextStyle(fontSize:12,color:secondaryText(context),fontWeight:FontWeight.w600)),
         const SizedBox(height:3),
         Text(inr(verifiedAmount(i)),
           style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
@@ -161,7 +161,7 @@ dynamic>> scopedInvoices(AppController app){
           style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
         const SizedBox(height:3),
         Text('${tr(context,'Billed')}: ${inr(i['amount'])}  ·  ${tr(context,'Verified')}: ${inr(i['paid'])}',
-          style:const TextStyle(color:muted,fontSize:11)),
+          style:TextStyle(color:secondaryText(context),fontSize:11)),
         if(awaitingReview && proof != null)...[
           const SizedBox(height:8),
           Text('${tr(context,'Submitted for verification')}: ${inr(proof['amount'])}',
@@ -191,7 +191,7 @@ dynamic>> scopedInvoices(AppController app){
         ],
         const SizedBox(height:5),
         Text('${tr(context,'Due')} ${i['due_date']}',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:11)),
         if(!app.owner&&amount(i[
           'outstanding'
@@ -350,7 +350,7 @@ dynamic>> scopedInvoices(AppController app){
       children:[
         HeroCard(label:'Invoice balance',value:inr(balance)),
         Surface(child:Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text(tr(context,'Payment type'),style:TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:plum)),
+          Text(tr(context,'Payment type'),style:TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:Theme.of(context).colorScheme.primary)),
           const SizedBox(height:12),
           Row(children:[
             Expanded(child:ChoiceChip(label:Text(tr(context,'Fully paid')),selected:fullyPaid,
@@ -368,9 +368,9 @@ dynamic>> scopedInvoices(AppController app){
             const SizedBox(height:12),
           ],
           Container(width:double.infinity,padding:const EdgeInsets.all(12),
-            decoration:BoxDecoration(color:const Color(0xFFF7EEFC),borderRadius:BorderRadius.circular(14)),
+            decoration:BoxDecoration(color:Theme.of(context).brightness==Brightness.dark?Theme.of(context).colorScheme.secondaryContainer:const Color(0xFFF7EEFC),borderRadius:BorderRadius.circular(14)),
             child:Text('Remaining after approval: ${inr(remaining)}',
-              style:const TextStyle(color:plum,fontWeight:FontWeight.w700))),
+              style:TextStyle(color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w700))),
           const SizedBox(height:15),
           _ResidentOwnerPaymentPreview(),
           const SizedBox(height:15),
@@ -378,8 +378,7 @@ dynamic>> scopedInvoices(AppController app){
             icon:const Icon(Icons.attach_file),
             label:Text(file==null?'Upload payment proof (required)':'Proof attached — change file')),
           const SizedBox(height:5),
-          const Text('Screenshot or PDF (PNG, JPG, WebP or PDF; maximum 5 MB).',
-            style:TextStyle(color:muted,fontSize:11)),
+          Text('Screenshot or PDF (PNG, JPG, WebP or PDF; maximum 5 MB).',style:TextStyle(color:secondaryText(context),fontSize:11)),
           const SizedBox(height:18),
           SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:()async{
             if(!form.currentState!.validate())return;
@@ -394,8 +393,7 @@ dynamic>> scopedInvoices(AppController app){
             if(mounted){setState(()=>busy=false);if(ok)Navigator.pop(context);}
           },child:Text(tr(context,busy?'Please wait…':'Submit for verification')))),
           const SizedBox(height:8),
-          const Text('Your balance updates once payment is confirmed.',
-            style:TextStyle(fontSize:11,color:muted)),
+          Text('Your balance updates once payment is confirmed.',style:TextStyle(fontSize:11,color:secondaryText(context))),
         ]))),
       ]);
   }
@@ -409,12 +407,12 @@ class _ResidentOwnerPaymentPreview extends StatelessWidget {
     final bank='${d['bank_name']??''}'.trim();
     final holder='${d['bank_holder']??''}'.trim();
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('Owner payment details',style:TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:plum)),
+      Text('Owner payment details',style:TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:Theme.of(context).colorScheme.primary)),
       const SizedBox(height:10),
       if(holder.isNotEmpty)Text(holder,style:const TextStyle(fontWeight:FontWeight.w700)),
-      if(upi.isNotEmpty)Text('UPI: $upi',style:const TextStyle(fontSize:12,color:muted)),
-      if(bank.isNotEmpty)Text('Bank: $bank',style:const TextStyle(fontSize:12,color:muted)),
-      if('${d['bank_account']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account']}',style:const TextStyle(fontSize:12,color:muted)),
+      if(upi.isNotEmpty)Text('UPI: $upi',style:TextStyle(fontSize:12,color:secondaryText(context))),
+      if(bank.isNotEmpty)Text('Bank: $bank',style:TextStyle(fontSize:12,color:secondaryText(context))),
+      if('${d['bank_account']??''}'.trim().isNotEmpty)Text('Account: ${d['bank_account']}',style:TextStyle(fontSize:12,color:secondaryText(context))),
       if(d['qr_file_id'] is int) Padding(padding:const EdgeInsets.symmetric(vertical:10),
         child:FutureBuilder<Uint8List>(
           future:app.api.download('/v3/files/${d['qr_file_id']}'),
@@ -423,8 +421,8 @@ class _ResidentOwnerPaymentPreview extends StatelessWidget {
             if(snapshot.hasError||snapshot.data==null) return const Text('QR not available. View owner payment details.',style:TextStyle(fontSize:12));
             return Center(child:Image.memory(snapshot.data!,width:170,height:170,fit:BoxFit.contain));
           })),
-      if(d['qr_file_id']==null)const Text('No QR uploaded yet. Request payment details from your owner.',style:TextStyle(fontSize:12,color:muted)),
-      const Text('Check the recipient in your UPI app before paying.',style:TextStyle(fontSize:11,color:muted)),
+      if(d['qr_file_id']==null)Text('No QR uploaded yet. Request payment details from your owner.',style:TextStyle(fontSize:12,color:secondaryText(context))),
+      Text('Check the recipient in your UPI app before paying.',style:TextStyle(fontSize:11,color:secondaryText(context))),
     ]);
   }
 } String mimeType(String name)=>switch(name.toLowerCase().split('.').last){
@@ -465,7 +463,7 @@ class PaymentsPage extends StatelessWidget {
         style:const TextStyle(fontWeight:FontWeight.w700,
         fontSize:12)),
         Text('${p['reference']} · ${p['created_at']}',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:10)),
         if(app.owner&&p['status']=='rejected')
           Padding(padding:const EdgeInsets.only(top:8),
@@ -492,13 +490,13 @@ class PaymentsPage extends StatelessWidget {
             ])
           else if(p['risk_level']=='not_analyzed'||p['analysis_status']==null)
             Text(tr(context,'Proof analysis not available for this record'),
-              style:const TextStyle(color:muted,fontSize:11))
+              style:TextStyle(color:secondaryText(context),fontSize:11))
           else
             Text(tr(context,'Document authenticity not verified'),
-              style:const TextStyle(color:muted,fontSize:11)),
+              style:TextStyle(color:secondaryText(context),fontSize:11)),
         ],
         if('${p['reason']??''}'.isNotEmpty)Text('${p['reason']}',
-        style:const TextStyle(color:muted,
+        style:TextStyle(color:secondaryText(context),
         fontSize:11))
       ])),
       if(app.rows('payments').isEmpty)const EmptyState('No payment submissions yet.')
@@ -587,7 +585,7 @@ class PaymentsPage extends StatelessWidget {
                 : (p['risk_flags'] as List).map((item)=>tr(context,'$item')).join(' • ')),
             const SizedBox(height:5),
             Text('${tr(context,'Analysis status')}: ${p['analysis_status']??'not_analyzed'}',
-              style:const TextStyle(fontSize:11,color:muted)),
+              style:TextStyle(fontSize:11,color:secondaryText(context))),
             const SizedBox(height:5),
             Text(tr(context,'Check bank credit before approval'),
               style:const TextStyle(fontSize:12)),
@@ -766,8 +764,7 @@ int id)async{
       Surface(child:Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('Record an expense',style:TextStyle(fontSize:18,fontWeight:FontWeight.w800)),
         const SizedBox(height:5),
-        const Text('Choose the PG receiving this expense. Each expense is recorded against that PG.',
-          style:TextStyle(fontSize:12,color:muted)),
+        Text('Choose the PG receiving this expense. Each expense is recorded against that PG.',style:TextStyle(fontSize:12,color:secondaryText(context))),
         const SizedBox(height:16),
         DropdownButtonFormField<int>(isExpanded:true,initialValue:validPid,
           decoration:const InputDecoration(labelText:'Expense for PG *'),
@@ -791,7 +788,7 @@ int id)async{
           validator:(v){final a=num.tryParse(v?.trim()??'');
             return a==null||!a.isFinite||a<=0?'Enter a valid positive amount':null;}),
         const SizedBox(height:10),
-        Text('Reporting month: ${app.period}',style:const TextStyle(color:muted,fontSize:12)),
+        Text('Reporting month: ${app.period}',style:TextStyle(color:secondaryText(context),fontSize:12)),
         if(error!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(error!,style:const TextStyle(color:Colors.red))),
         const SizedBox(height:14),
         SizedBox(width:double.infinity,child:FilledButton.icon(
@@ -809,8 +806,8 @@ int id)async{
         child:Row(children:[
           Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text('${r['description']}',style:const TextStyle(fontWeight:FontWeight.w800)),
-            Row(children:[const Icon(Icons.apartment_rounded,size:17,color:plum),const SizedBox(width:5),Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'} · ${r['category']}',
-              style:const TextStyle(color:plum,fontSize:14,fontWeight:FontWeight.w700)))])])),
+            Row(children:[Icon(Icons.apartment_rounded,size:17,color:Theme.of(context).colorScheme.primary),const SizedBox(width:5),Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'} · ${r['category']}',
+              style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:14,fontWeight:FontWeight.w700)))])])),
           Text(inr(r['amount']),style:const TextStyle(fontWeight:FontWeight.w800)),
           const Icon(Icons.edit_outlined,size:17)
         ])),
@@ -886,8 +883,7 @@ int id)async{
           billed+spent,
           const Color(0xFFBF8152)),
           const SizedBox(height:10),
-          const Text('Deposits, refunds and tax are excluded.',
-          style:TextStyle(color:muted,
+          Text('Deposits, refunds and tax are excluded.',style:TextStyle(color:secondaryText(context),
           fontSize:10))
         ]))
       ]else if(tab=='Occupancy')HeroCard(label:'Occupancy',
@@ -1062,10 +1058,9 @@ int id)async{
         if(d['qr_file_id']==null)Padding(padding:const EdgeInsets.only(top:12),
           child:Text(app.owner?'No UPI QR uploaded for this PG yet. Use the Upload QR button below.':
           'No QR image uploaded yet. Contact your PG owner for payment details.',
-          style:const TextStyle(color:muted))),
+          style:TextStyle(color:secondaryText(context)))),
         const SizedBox(height:8),
-        const Text('Always verify the beneficiary name in your UPI or bank app before sending money.',
-          style:TextStyle(color:muted,fontSize:12)),
+        Text('Always verify the beneficiary name in your UPI or bank app before sending money.',style:TextStyle(color:secondaryText(context),fontSize:12)),
       ])),
       if(app.profile[
         'role'

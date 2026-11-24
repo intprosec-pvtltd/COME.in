@@ -68,7 +68,7 @@ class _DashboardState extends State<Dashboard> {
         ),
       ),
       Text(app.owner?'${tr(context,'YOUR PORTFOLIO')} · ${app.period}':app.staff?tr(context,'YOUR ASSIGNED WORK'):tr(context,'WELCOME HOME'),
-      style:const TextStyle(color:muted,
+      style:TextStyle(color:secondaryText(context),
       fontSize:10,
       letterSpacing:1.4,
       fontWeight:FontWeight.w800)),
@@ -78,8 +78,8 @@ class _DashboardState extends State<Dashboard> {
       fontWeight:FontWeight.w900)),
       const SizedBox(height:7),
       Text(app.owner?'A good day starts with everything in place.':'${app.profile['tenant']?['name']} · ${app.profile['room']??'Room not assigned'}',
-      style:const TextStyle(fontSize:12,
-      color:muted)),
+      style:TextStyle(fontSize:12,
+      color:secondaryText(context))),
       if(!app.owner && !app.staff) Padding(
         padding: const EdgeInsets.only(top: 12),
         child: FeatureTile(
@@ -92,7 +92,7 @@ class _DashboardState extends State<Dashboard> {
       if(app.owner)Padding(
         padding:const EdgeInsets.only(top:13,bottom:14),
         child:Material(
-          color:const Color(0xFFF4EBF6),
+          color:Theme.of(context).brightness==Brightness.dark?Theme.of(context).cardColor:const Color(0xFFF4EBF6),
           borderRadius:BorderRadius.circular(18),
           child:InkWell(
             borderRadius:BorderRadius.circular(18),
@@ -100,18 +100,18 @@ class _DashboardState extends State<Dashboard> {
             child:Padding(
               padding:const EdgeInsets.symmetric(horizontal:15,vertical:13),
               child:Row(children:[
-                const CircleAvatar(
-                  radius:20,backgroundColor:Colors.white,
-                  child:Icon(Icons.home_work_outlined,color:plum,size:22)),
+                CircleAvatar(
+                  radius:20,backgroundColor:Theme.of(context).brightness==Brightness.dark?Theme.of(context).colorScheme.secondaryContainer:Colors.white,
+                  child:Icon(Icons.home_work_outlined,color:Theme.of(context).colorScheme.primary,size:22)),
                 const SizedBox(width:12),
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  const Text('Manage properties',
-                    style:TextStyle(fontWeight:FontWeight.w800,color:plum,fontSize:14)),
+                  Text('Manage properties',
+                    style:TextStyle(fontWeight:FontWeight.w800,color:Theme.of(context).colorScheme.primary,fontSize:14)),
                   const SizedBox(height:2),
                   Text('${app.rows('properties').length} ${app.rows('properties').length==1?'property':'properties'} in your portfolio',
-                    style:const TextStyle(color:muted,fontSize:12)),
+                    style:TextStyle(color:secondaryText(context),fontSize:12)),
                 ])),
-                const Icon(Icons.arrow_forward_ios_rounded,size:16,color:plum),
+                Icon(Icons.arrow_forward_ios_rounded,size:16,color:Theme.of(context).colorScheme.primary),
               ]),
             ),
           ),
@@ -191,8 +191,8 @@ class _DashboardState extends State<Dashboard> {
         Text('${n['body']}',
         maxLines:2,
         overflow:TextOverflow.ellipsis,
-        style:const TextStyle(fontSize:12,
-        color:muted))
+        style:TextStyle(fontSize:12,
+        color:secondaryText(context)))
       ])),
       if(app.rows('notices').isEmpty)const EmptyState('No announcements yet.')
     ]);
@@ -213,7 +213,7 @@ class _DashboardState extends State<Dashboard> {
     fontSize:21)),
     const SizedBox(height:4),
     Text(tr(context,label),
-    style:const TextStyle(color:muted,
+    style:TextStyle(color:secondaryText(context),
     fontSize:11))
   ])));
 } class FeatureMenu extends StatelessWidget {
@@ -312,7 +312,7 @@ class _DashboardState extends State<Dashboard> {
           fontSize:13)),
           const SizedBox(height:8),
           Text(tr(context,'Open →'),
-          style:TextStyle(color:muted,
+          style:TextStyle(color:secondaryText(context),
           fontSize:11))
         ])))
       ])

@@ -14,7 +14,7 @@ void main() {
       'Full Name', 'Email', 'Phone Number', 'Password', 'Property Name',
       'Confirm Password', 'I agree to the Terms & Conditions and privacy policy',
       'Already have an account? Sign in', 'Keep me signed in',
-      'Forgot password?', 'Email or Phone',
+      'Forgot password?', 'Phone Number', 'Activate mobile login', 'Enter a valid mobile number',
     ];
     for (final label in required) {
       final translations = localizedLabels[label];

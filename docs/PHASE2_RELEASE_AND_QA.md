@@ -1,0 +1,42 @@
+# Stay Sync Manage — consolidated Phase 2 source (24 November 2026)
+
+## Release state
+Source integration is complete for the new phone-authentication flows, community role and sender-color changes, approved dark logo and previous dark/navigation patch. This is a **staging release candidate**, not a production-certified release. Flutter is not installed in the packaging environment; new Dart tests, analysis, APK compilation and physical-device tests are pending. Real SMS delivery and production PostgreSQL behavior are not verified. The hosted backend was not changed.
+
+## What is included
+The complete active source from the supplied original ZIP plus the prior dark/navigation patch, mobile/backend/web/platform-admin, native platform files, assets, dependency manifests, scripts, documentation and test code. Runtime data, secret files, local databases, private uploads, generated dependencies and caches are excluded; preserve all of these on the existing installation. The full archive is also suitable for inspecting the source separately. Legacy reference material is not an active application component.
+
+The source logo supplied by the user is in `docs/branding/`. The dark logo asset has only its dark purple backdrop removed and its margins cropped; original white lettering, gradient Sync and door are preserved. Existing light logo remains unchanged. The previous IntProSec dark asset is retained. The sign-in art is intentionally a light branded surface; it does not use a white-on-dark logo on that light artwork.
+
+Community message payloads include `author_role` based on server-owned user rows. Owner/Manager/Staff badges are not inferred from names. Resident room remains from existing data. A stable 16-color contrast-tested palette is indexed by user ID (colors may repeat across large or nonconsecutive ID sets). Authenticated previews can retry; missing files on old hosting cannot be reconstructed from source. Persist chat uploads on the hosting storage volume or migrate them securely to durable object storage before redeploying.
+
+## Authentication
+- `/api/v3/phone/login`: verified E.164 phone plus existing password. Indian ten-digit mobile numbers are normalized to +91. International numbers must include their country code.
+- `/api/v3/phone/enroll/request`, `/enroll/confirm`: existing account email/password plus SMS verification. Preserves account ID, tenant, password hash and records. This is a one-time migration step, not normal email login. Invited residents use their temporary credentials then complete mandatory password change.
+- `/api/v3/phone/register/request`, `/register`: verify SMS before creating owner account; registration retains email as contact/legacy web identifier. Tenant accounts remain invitation-only.
+- `/api/v3/phone/forgot-password`, `/reset/verify`, `/reset-password`: six-digit SMS code, five-minute expiry, 30-second resend delay, maximum five attempts per code, rate limits per phone/IP and global SMS budget; one-use reset grant with five-minute expiry. Existing sessions rejected after password reset. Provider credentials stay on backend.
+- Legacy `/api/login` supports email for existing web users; its unverified phone fallback is removed. Legacy email recovery remains available for unverified accounts only; verified accounts use SMS recovery. Legacy unverified owner registration is disabled by default; `ALLOW_LEGACY_EMAIL_REGISTRATION=true` is a temporary migration-only escape hatch and must not be enabled in normal deployment.
+- A verified login number is separate from editable contact phone. Contact changes cannot transfer login ownership. Changing verified login number requires a separately verified support process (not included). Accounts sharing a number must resolve ownership and enroll different numbers; no automatic trust or reassignment.
+- Reset request responses are generic for unknown accounts; SMS delivery errors are not exposed as account-specific responses. Timing and live abuse resistance require staging security tests.
+
+## Deployment order (do NOT replace production database)
+1. Back up hosted PostgreSQL, subscription database/storage, private/chat media and existing source commit. Verify restore procedure. Clone database/storage into staging, configure a separate staging backend and isolated SMS testing.
+2. Apply the source merge script or review changed files. Keep existing `DATABASE_URL`, `SECRET_KEY`, push, mail, payment, storage and CORS configuration. Never upload credentials or customer data to Git.
+3. Configure new backend environment variables from `backend/phone-auth.env.example`. Generate a separate cryptographically random `PHONE_OTP_SECRET` (at least 32 chars) and keep it stable. Set provider credentials and approved messaging service/sender. SMS integration uses Twilio Messages REST API; India delivery must be enabled and compliant with provider routing, sender registration and applicable DLT/template rules. Confirm actual delivery with the provider. No SMS is simulated or logged by production code. Missing configuration fails closed.
+4. Run `python audit_phone_migration.py` from the backend directory **against staging**, review duplicate/missing contacts, test enrollment and recovery. Importing main creates four additive tables, without deleting/modifying old columns. Ensure database role permits table creation or have the DBA create via controlled migration. Existing phone profile values remain unverified until enrollment.
+5. Run backend QA and Flutter QA on Windows. Test real SMS, Postgres concurrency, trusted reverse proxy/rate-limiting configuration, delivery budget, failed delivery, inactive users, account migration and existing web login. Configure a durable DB and media before production deploy. Staging APK must use its own API URL.
+6. Verify on Android: light/dark/system, all screens, previous tab history and nested back, keyboard/dialog priority, both account roles, message attachment previews, full payment/room/rent/subscription flows, phone login, registration, OTP expiry/replay/reset and existing records. Only after passing, deploy backend first, verify `/openapi.json` includes `/api/v3/phone/login` and `/api/v3/phone/reset/verify`, then publish the updated APK. Old email-login apps remain able to authenticate existing users during migration; old unverified signup is disabled.
+7. Production API build command: `flutter build apk --debug --dart-define=API_URL=https://come-in.onrender.com` (debug is for device QA, not store release). Local emulator override `--dart-define=API_URL=http://10.0.2.2:8000`. USB device local test uses `adb reverse tcp:8000 tcp:8000` plus `--dart-define=API_URL=http://127.0.0.1:8000`. Use staging URL first.
+
+## Test results
+- Python syntax check: passed for changed backend modules.
+- API startup and all eight new mobile authentication routes: passed against SQLite test DB.
+- New integration module `tests/test_phone_auth_phase2.py`: 8 passed. SMS transport mocked, actual SQL and password hashing/session checks exercised.
+- Existing V3 tests: 23 passed (legacy fixture setup explicitly enables legacy registration; old unverified-phone test updated to enforce new contract).
+- Remaining backend test modules: 36 passed after correcting two existing circular-import test setup issues (6 deletion/push tests and 2 risk-ack contract tests); no test assertions weakened. Total 67 passing tests run by individual module to isolate test databases.
+- Sender palette calculated contrast ratio: minimum 5.66:1 on light sent-bubble surface and 6.74:1 on dark sent-bubble surface; new Flutter palette unit tests supplied, not executed.
+- Previous patch's reported Flutter 21/21 and analyzer zero issues do not certify this new release. Run new tests and analyzer on workstation.
+- Production PostgreSQL, real SMS, actual Android rendering/navigation, release signing and end-to-end deployed integration are pending. Full WCAG compliance not certified.
+
+## Rollback
+The source merge script backs up overwritten files and tracks new files. It checks source hashes against the original and the applied patch; unknown changes cause an abort. For backend rollback revert to the last deployed commit. Do not restore a stale database over live records or drop additive tables. If a rollback is needed after users migrate, plan for their verified bindings and credential changes; keep legacy email login available. Use a database backup restore only under an approved data recovery procedure. The original web/dashboard source is preserved.

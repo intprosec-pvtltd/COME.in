@@ -1,6 +1,8 @@
 """Regression tests for resident rent, account access and notification targeting."""
 import uuid
 from test_v3 import client, login, req, create
+import os as _legacy_test_os
+_legacy_test_os.environ['ALLOW_LEGACY_EMAIL_REGISTRATION']='true'
 
 def test_resident_rent_and_safe_deactivation():
     uid=uuid.uuid4().hex

@@ -306,7 +306,7 @@ EXEMPT_PREFIXES = (
     '/api/owner-subscriptions/','/api/v3/state','/api/v3/password',
     '/api/v3/logout','/api/v3/profile','/api/v3/receipt',
     '/api/v3/receipts','/api/v3/export','/api/v3/push-tokens',
-    '/api/reset','/api/forgot','/api/recovery',
+    '/api/reset','/api/forgot','/api/recovery','/api/v3/phone/',
 )
 
 async def enforcement_middleware(request:Request,call_next):

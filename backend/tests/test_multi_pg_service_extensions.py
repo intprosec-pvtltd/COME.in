@@ -5,6 +5,8 @@ These tests operate exclusively against the existing local SQLite test database.
 import uuid
 
 from test_v3 import client, login, req, create
+import os as _legacy_test_os
+_legacy_test_os.environ['ALLOW_LEGACY_EMAIL_REGISTRATION']='true'
 
 
 def test_pg_specific_meals_joining_codes_and_payment_accounts():
