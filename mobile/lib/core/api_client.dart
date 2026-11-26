@@ -43,13 +43,13 @@ class ApiClient {
       throw const ApiException(0, 'PG server request timed out. Check the connection and retry.');
     }
     if (error is SocketException) {
-      throw const ApiException(0, 'Cannot connect to PG server. For local testing, check the running backend and USB port forwarding.');
+      throw const ApiException(0, 'Cannot connect to Stay Sync. Check your internet connection and try again.');
     }
     if (error is HandshakeException || error is TlsException) {
-      throw const ApiException(0, 'Secure connection to PG server failed. Check the server certificate.');
+      throw const ApiException(0, 'Could not establish a secure connection. Please try again.');
     }
     if (error is http.ClientException) {
-      throw const ApiException(0, 'Network request failed. Check the API address and Android network permissions.');
+      throw const ApiException(0, 'Network request failed. Check your connection and try again.');
     }
     throw error;
   }
@@ -110,7 +110,7 @@ class ApiClient {
   static void _requireSuccess(http.Response response, dynamic decoded) {
     if (response.statusCode < 400) return;
     final detail = decoded is Map ? decoded['detail'] : null;
-    if (response.statusCode == 422) {
+    if (response.statusCode == 422 && detail is! String) {
       throw ApiException(422, _validationMessage(detail));
     }
     throw ApiException(response.statusCode,

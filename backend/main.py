@@ -11,7 +11,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker,
 from pwdlib import PasswordHash
 import jwt
 from dotenv import load_dotenv
+from production_config import production_origins, validate_production
 load_dotenv()
+validate_production()
 URL=os.getenv('DATABASE_URL','sqlite:///./pg_dev.db')
 engine=create_engine(URL,connect_args={'check_same_thread':False} if URL.startswith('sqlite') else {},pool_pre_ping=True)
 SessionLocal=sessionmaker(engine,expire_on_commit=False)
@@ -107,11 +109,11 @@ class BankUpdate(BaseModel):
  ifsc:str=''
 passwords=PasswordHash.recommended()
 SECRET=os.getenv('SECRET_KEY','development-only-not-for-production')
-app=FastAPI(title='COME.in PG Platform API',version='0.1.0')
+app=FastAPI(title='Stay Sync Manage API',version='0.1.0')
 # Explicit allowlist: the deployed admin dashboard must be permitted even when
 # CORS_ORIGINS was configured for localhost only. Never use '*' with credentials.
 _cors_origins = {'https://comein-admin.onrender.com', 'http://localhost:5173', 'http://127.0.0.1:5173'}
-_cors_origins.update(origin.strip().rstrip('/') for origin in os.getenv('CORS_ORIGINS', '').split(',') if origin.strip())
+_cors_origins = production_origins() if os.getenv('STAYSYNC_ENV') == 'production' else _cors_origins | production_origins()
 app.add_middleware(CORSMiddleware, allow_origins=sorted(_cors_origins),
                    allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 def db():
@@ -212,7 +214,7 @@ def payment_methods(u:User=Depends(current),session:Session=Depends(db)):
 @app.put('/api/payment-methods')
 def update_payment_methods(data:BankUpdate,u:User=Depends(current),session:Session=Depends(db)):
  role(u,'owner');t=session.get(Tenant,u.tenant_id)
- for k,v in data.model_dump().items():setattr(t,k,v)
+ for k,v in data.model_dump(exclude_unset=True).items():setattr(t,k,v)
  session.commit();return {'ok':True,'warning':'In production require step-up authentication and audit log'}
 @app.post('/api/payments',status_code=201)
 def submit_payment(data:PaymentSubmission,u:User=Depends(current),session:Session=Depends(db)):
@@ -306,7 +308,13 @@ def start_staysync_trial_reminders():
 from subscription_integration import mount_subscription_router
 mount_subscription_router()
 
+from feature_control import router as feature_control_router
+app.include_router(feature_control_router)
+
 # Additive mobile authentication; legacy web API remains available.
+from app_feedback import router as feedback_router
+app.include_router(feedback_router)
+
 from phone_auth import router as phone_router
 app.include_router(phone_router)
 Base.metadata.create_all(engine)

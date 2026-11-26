@@ -6,6 +6,7 @@ import 'app/router.dart';
 import 'core/app_theme.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/account/account.dart';
+import 'features/account/app_feedback.dart';
 import 'features/account/identity_proof.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,13 @@ class _SubscriptionAccessGateState extends State<SubscriptionAccessGate> {
     final status='${trial?['status']??''}';
     final gated=c.profile['role']=='owner' && trial?['enforcement_enabled']==true
       && const {'pending','trial_expired','paid_expired','suspended'}.contains(status);
-    if(!gated) return const AppShell();
+    if(!gated) {
+      if (const {'owner','resident'}.contains(c.profile['role'])) {
+        final account = feedbackAccount(c);
+        return FeedbackReminder(key: ValueKey(account), account: account, child: const AppShell());
+      }
+      return const AppShell();
+    }
     final pending=status=='pending';
     return Scaffold(
       appBar:AppBar(title:const Text('Stay Sync subscription')),

@@ -6,6 +6,8 @@ import '../../app/controller.dart';
 import '../../app/router.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
+import 'app_feedback.dart';
+import 'legal_content.dart';
 class AccountPage extends StatelessWidget {
   const AccountPage({
     super.key
@@ -16,18 +18,26 @@ class AccountPage extends StatelessWidget {
     return PageBody(title:'Your account',
     subtitle:'Manage your account and settings.',
     children:[
-      Surface(child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        DisplayPhotoWidget(kind:'user', id:(p['id'] as num).toInt(), revision:(p['photo_revision'] as num?)?.toInt()??0, size:58),
-        const SizedBox(width:12),
-        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text('${p['name']}',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:17)),
-          Text('${p['email']}',style:TextStyle(color:secondaryText(context),fontSize:12)),
-          if('${p['verified_login_phone']??''}'.isNotEmpty)Text('${p['verified_login_phone']} · Verified login',style:TextStyle(color:secondaryText(context),fontSize:12)),
-          Text('${p['role']}',style:const TextStyle(color:lavender,fontSize:11))
-        ])),
-        IconButton(tooltip:'Edit profile',onPressed:()=>openPage(context,'profileEditor'),
-          icon:Icon(Icons.edit_outlined,color:Theme.of(context).colorScheme.primary))
-      ])),
+      Semantics(
+        button: true,
+        label: 'Open profile editor',
+        child: Surface(
+          onTap: ()=>openPage(context,'profileEditor'),
+          child: Row(children:[
+            DisplayPhotoWidget(kind:'user', id:(p['id'] as num).toInt(), revision:(p['photo_revision'] as num?)?.toInt()??0, size:62),
+            const SizedBox(width:14),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text('${p['name']}',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800)),
+              Text('${p['email']}',overflow:TextOverflow.ellipsis,style:TextStyle(color:secondaryText(context))),
+              if('${p['verified_login_phone']??''}'.isNotEmpty)
+                Text('${p['verified_login_phone']} · Verified mobile',style:TextStyle(color:secondaryText(context),fontSize:12)),
+              const SizedBox(height:5),
+              Text('View and edit profile',style:TextStyle(color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w700)),
+            ])),
+            const Icon(Icons.chevron_right),
+          ]),
+        ),
+      ),
       if(app.owner)...[
         const SectionTitle('Business settings'),
         FeatureTile(title:'Payment setup & QR',subtitle:'Manage UPI, bank account and QR image',
@@ -53,6 +63,8 @@ class AccountPage extends StatelessWidget {
       icon:item.$3,
       onTap:()=>openPage(context,
       item.$1)),
+      if (const {'owner','resident'}.contains(p['role']))
+        FeatureTile(title:'Rate Stay Sync Manage',icon:Icons.star_outline,onTap:()=>showAppFeedback(context)),
       const SizedBox(height:15),
       OutlinedButton.icon(onPressed:()async{
         if(!await ask(context,
@@ -397,29 +409,7 @@ class _AccommodationInfo extends StatelessWidget {
   const LegalPage({
     super.key
   });
-  @override Widget build(BuildContext context)=>const PageBody(title:'Terms & privacy',
-  subtitle:'How your information is used.',
-  children:[
-    Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-    children:[
-      Text('Your information',
-      style:TextStyle(fontSize:17,
-      fontWeight:FontWeight.w800)),
-      SizedBox(height:12),
-      Text('Stay Sync Manage uses your account, PG and payment information to provide the service. Access depends on your assigned PG and role.',
-      style:TextStyle(height:1.7,
-      fontSize:12)),
-      SizedBox(height:18),
-      Text('Company policy',
-      style:TextStyle(fontSize:17,
-      fontWeight:FontWeight.w800)),
-      SizedBox(height:12),
-      Text('Formal privacy terms are not yet published here. Contact IntProSec for the current policy and data requests.',
-      style:TextStyle(height:1.7,
-      fontSize:12))
-    ])),
-    Attribution()
-  ]);
+  @override Widget build(BuildContext context)=>const LegalDocument();
 }
 
 class FirstLoginPasswordPage extends StatefulWidget {

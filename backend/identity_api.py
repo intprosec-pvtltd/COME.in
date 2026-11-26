@@ -91,7 +91,7 @@ async def submit_proof(file: UploadFile = File(...), u: User = Depends(current),
                     for item in previous]
     result = await run_in_threadpool(
         inspect_file, data, mime, prior_hashes,
-        known_visual_hashes=prior_visual, document_kind='identity')
+        known_visual_hashes=prior_visual, document_kind='identity', perform_ocr=False)
     put(s, u.tenant_id, 'identity_risk_v31', p.id, result)
     # Show a new notice in the existing PG owner notification feed.
     from v3_api import alert

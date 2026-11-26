@@ -575,28 +575,8 @@ class PaymentsPage extends StatelessWidget {
           decoration:BoxDecoration(color:const Color(0xFFFFF4E5),
             borderRadius:BorderRadius.circular(12)),
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(tr(context,'Authenticity not verified'),
-              style:const TextStyle(fontWeight:FontWeight.bold)),
-            const SizedBox(height:5),
-            Text(p['risk_level']=='not_analyzed'||p['analysis_status']==null
-              ? tr(context,'Proof analysis not available for this record')
-              : (p['risk_flags'] as List? ?? []).isEmpty
-                ? tr(context,'No flags found')
-                : (p['risk_flags'] as List).map((item)=>tr(context,'$item')).join(' • ')),
-            const SizedBox(height:5),
-            Text('${tr(context,'Analysis status')}: ${p['analysis_status']??'not_analyzed'}',
-              style:TextStyle(fontSize:11,color:secondaryText(context))),
-            const SizedBox(height:5),
             Text(tr(context,'Check bank credit before approval'),
-              style:const TextStyle(fontSize:12)),
-            const SizedBox(height:5),
-            Text(tr(context,'AI origin cannot be confirmed from this file.'),
-              style:const TextStyle(fontSize:11)),
-            if((p['review_notes'] as List? ?? []).isNotEmpty) ...[
-              const SizedBox(height:5),
-              Text((p['review_notes'] as List).map((item)=>tr(context,'$item')).join(' • '),
-                style:const TextStyle(fontSize:11)),
-            ],
+              style:const TextStyle(fontWeight:FontWeight.w700)),
           ])),
 
         if(p[
@@ -1034,9 +1014,17 @@ int id)async{
           style:const TextStyle(fontWeight:FontWeight.w800, fontSize:16)),
         const SizedBox(height:10),
         if('${d['upi_id']??''}'.trim().isNotEmpty)...[
-          Text('UPI ID: ${d['upi_id']}',style:const TextStyle(fontWeight:FontWeight.w700)),
-          TextButton.icon(onPressed:()=>copyValue(context,'${d['upi_id']}'),
-          icon:const Icon(Icons.copy,size:16),label:const Text('Copy UPI ID')),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: const Text('UPI ID'),
+            subtitle: SelectableText('${d['upi_id']}'),
+            trailing: IconButton.filledTonal(
+              tooltip: 'Copy UPI ID',
+              onPressed: () => copyValue(context,'${d['upi_id']}'),
+              icon: const Icon(Icons.copy_outlined,size:18),
+            ),
+          ),
         ],
         if('${d['bank_holder']??''}'.trim().isNotEmpty)Text('Account holder: ${d['bank_holder']}'),
         if('${d['bank_name']??''}'.trim().isNotEmpty)Text('Bank: ${d['bank_name']}'),

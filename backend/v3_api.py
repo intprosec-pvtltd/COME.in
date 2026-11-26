@@ -98,6 +98,7 @@ def safe_email(v):
  if error:raise HTTPException(422,error)
  return v
 def security_check(u,payload,authorization,session):
+ if payload.get('iat',0)<=meta(session,u.tenant_id,'deleted_account',u.id).get('deleted_at',0):raise HTTPException(401,'Sign in again.')
  key=hashlib.sha256(authorization.encode()).hexdigest()
  if doc(session,u.tenant_id,'revoked',key):raise HTTPException(401,'Session has ended. Sign in again.')
  before=meta(session,u.tenant_id,'security',u.id).get('changed_at',0)
@@ -573,7 +574,7 @@ def save_entity(kind,identifier,data,u,s,creating):
  else:owner(u)
  if kind=='resident' and creating:raise HTTPException(422,'Use owner resident invitation to generate and share temporary access.')
  try:d=SCHEMAS[kind].model_validate(data).model_dump()
- except ValidationError as err:raise HTTPException(422,str(err))
+ except ValidationError as err:raise HTTPException(422,err.errors(include_url=False,include_context=False,include_input=False))
  if 'property_id' in d:property_exists(s,u,d['property_id'])
  if kind in ('property','booking'):
   if creating:
@@ -599,9 +600,14 @@ def save_entity(kind,identifier,data,u,s,creating):
  elif kind in ('resident','staff'):
   if creating and kind=='staff' and len(d['password'])<8:raise HTTPException(422,'Initial password must be at least 8 characters')
   mail=safe_email(d['email'])
-  if kind=='resident':allocation_check(s,u,d['room'],d['bed'],d['property_id'],None if creating else identifier)
   r=User(tenant_id=u.tenant_id,name=d['name'],email=mail,role=kind,password_hash=passwords.hash(d['password']) if kind=='staff' else '',room=d['room']) if creating else tenant_get(s,User,identifier,u.tenant_id)
   if not creating and r.role!=kind:raise HTTPException(404,'Person not found')
+  if kind=='resident':
+   previous=meta(s,u.tenant_id,'resident_meta',identifier)
+   allocation=(d['property_id'],d['room'],d['bed'])
+   existing=(previous.get('property_id',0),r.room,previous.get('bed',0))
+   if creating or allocation!=existing:
+    allocation_check(s,u,d['room'],d['bed'],d['property_id'],None if creating else identifier)
   r.name=d['name'];r.email=mail;r.room=d['room'];s.add(r);s.flush();identifier=r.id
   if creating and kind=='resident':issue_temporary_access(s,u,r)
   pm=meta(s,u.tenant_id,'profile',identifier);pm['phone']=d['phone'];put(s,u.tenant_id,'profile',identifier,pm)

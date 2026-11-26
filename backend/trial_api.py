@@ -313,6 +313,8 @@ async def enforcement_middleware(request:Request,call_next):
     if os.getenv('TRIAL_ENFORCEMENT_ENABLED','false').lower() != 'true':
         return await call_next(request)
     path=request.url.path
+    if path in ('/api/me', '/api/v3/app-feedback', '/api/owner-features', '/api/expense-analysis', '/api/expense-analysis/export'):
+        return await call_next(request)
     if not path.startswith('/api/') or any(path == p.rstrip('/') or path.startswith(p) for p in EXEMPT_PREFIXES):
         return await call_next(request)
     auth=request.headers.get('authorization','')

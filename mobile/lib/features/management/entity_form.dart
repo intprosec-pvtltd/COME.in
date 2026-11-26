@@ -210,7 +210,7 @@ class EntityForm extends StatefulWidget {
       ]!.text))controls[
         f.key
       ]!.text=f.options!.first;
-    }property=(widget.initial['property_id'] as num?)?.toInt()??-1;
+    }property=(widget.initial['property_id'] as num?)?.toInt()??(widget.kind=='resident'&&widget.id!=null?0:-1);
   } @override void didChangeDependencies(){
     super.didChangeDependencies();
     final selected=AppScope.of(context).propertyId;
@@ -277,7 +277,72 @@ class EntityForm extends StatefulWidget {
     }finally{
       if(mounted)setState(()=>busy=false);
     }
-  } @override Widget build(BuildContext context){
+  }
+
+  Widget _residentAllocation(AppController app) {
+    final currentRoom = controls['room']!.text;
+    final currentBed = int.tryParse(controls['bed']!.text) ?? 0;
+    final rooms = <String, List<int>>{};
+    for (final room in app.rows('rooms')) {
+      if ((room['property_id'] ?? 0) != property) continue;
+      final name = '${room['name']}';
+      final capacity = (room['beds'] as num?)?.toInt() ?? 0;
+      final used = app.rows('residents').where((other) =>
+        other['id'] != widget.id && (other['property_id'] ?? 0) == property && other['room'] == name).toList();
+      final occupied = used.map((other) => other['bed']).toSet();
+      final available = [
+        if (used.length < capacity)
+          for (var bed = 1; bed <= capacity; bed++)
+            if (!occupied.contains(bed)) bed,
+      ];
+      if (available.isNotEmpty) rooms[name] = available;
+    }
+    if (currentRoom.isNotEmpty && (currentBed > 0 || currentRoom == widget.initial['room'])) {
+      final beds = rooms.putIfAbsent(currentRoom, () => []);
+      if (!beds.contains(currentBed)) beds.add(currentBed);
+    }
+    final selected = rooms.containsKey(currentRoom) ? currentRoom : '';
+    final beds = rooms[selected] ?? const <int>[];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      DropdownButtonFormField<String>(
+        key: ValueKey('room-$property'),
+        initialValue: selected,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Room'),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Unassigned')),
+          for (final entry in rooms.entries)
+            DropdownMenuItem(value: entry.key, child: Text(entry.key, overflow: TextOverflow.ellipsis)),
+        ],
+        onChanged: busy ? null : (room) => setState(() {
+          controls['room']!.text = room ?? '';
+          controls['bed']!.text = '0';
+        }),
+      ),
+      if (rooms.isEmpty)
+        const Padding(padding: EdgeInsets.only(top: 8), child: Text('No rooms with available beds in this PG.')),
+      if (selected.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        DropdownButtonFormField<int>(
+          key: ValueKey('bed-$property-$selected'),
+          initialValue: beds.contains(currentBed) ? currentBed : null,
+          decoration: const InputDecoration(labelText: 'Bed number *'),
+          items: beds.map((bed) => DropdownMenuItem(value: bed, child: Text('Bed $bed'))).toList(),
+          onChanged: busy ? null : (bed) => setState(() => controls['bed']!.text = '${bed ?? 0}'),
+          validator: (bed) {
+            final legacy = currentBed == 0 && widget.id != null &&
+                selected == widget.initial['room'] &&
+                property == (widget.initial['property_id'] ?? 0) &&
+                (widget.initial['bed'] ?? 0) == 0;
+            return bed == null && !legacy ? 'Choose an available bed.' : null;
+          },
+        ),
+      ],
+      const SizedBox(height: 16),
+    ]);
+  }
+
+  @override Widget build(BuildContext context){
     final app=AppScope.of(context);
     final properties=app.rows('properties').where((p)=>p[
       'archived'
@@ -303,10 +368,16 @@ class EntityForm extends StatefulWidget {
           hint:const Text('Choose the correct PG'),
           items:properties.map((p)=>DropdownMenuItem(value:p['id'] as int,
           child:Text('${p['name']}',overflow:TextOverflow.ellipsis))).toList(),
-          onChanged:(v)=>setState(()=>property=v??-1)),
+          onChanged:busy?null:(v)=>setState((){
+            if(widget.kind=='resident' && property!=v){
+              controls['room']!.clear();
+              controls['bed']!.text='0';
+            }
+            property=v??-1;
+          })),
           const SizedBox(height:16)
         ],
-        for(final f in fields)Padding(padding:const EdgeInsets.only(bottom:16),
+        for(final f in fields.where((f)=>widget.kind!='resident'||!{'room','bed'}.contains(f.key)))Padding(padding:const EdgeInsets.only(bottom:16),
         child:f.options!=null?DropdownButtonFormField<String>(isExpanded:true,
         initialValue:controls[
           f.key
@@ -331,13 +402,14 @@ class EntityForm extends StatefulWidget {
               value.isNotEmpty&&value.length<3){
             return 'Enter at least 3 characters for ${f.label.toLowerCase()}.';
           }
-          if(f.number&&num.tryParse(value)==null)return 'Enter a number';
+          if(f.number&&num.tryParse(value)?.isFinite!=true)return 'Enter a number';
           if(f.key=='monthly_rent'&&(num.tryParse(value)??-1)<0)return 'Monthly rent cannot be negative';
           if(f.key=='beds'&&((int.tryParse(value)??0)<1||(int.tryParse(value)??0)>100))return 'Use a whole number from 1–100';
           if(f.secret&&value.length<8)return 'Use at least 8 characters';
           if(f.key=='email')return emailError(value);
           return null;
         })),
+        if(widget.kind=='resident') _residentAllocation(app),
         if(error!=null)Padding(padding:const EdgeInsets.only(bottom:15),
         child:Semantics(liveRegion:true,
         child:Text(error!,
