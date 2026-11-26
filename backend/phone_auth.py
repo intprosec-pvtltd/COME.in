@@ -170,6 +170,7 @@ class RegisterIn(CodeIn):
     password:str=Field(min_length=8,max_length=128)
     property_name:str=Field(min_length=2,max_length=120)
     role:str=Field(default='owner',pattern='^owner$')
+    legal_version:str|None=Field(default=None,max_length=32)
 
 def existing(s,data):
     u=s.scalar(select(User).where(User.email==data.email.strip().lower()))
@@ -215,12 +216,17 @@ def register_phone(data:RegisterIn,request:Request,s:Session=Depends(db)):
     email=safe_email(data.email)
     if binding(s,phone) or s.scalar(select(User).where(User.email==email)):raise HTTPException(409,'Account already exists. Sign in or activate mobile login.')
     if len(data.name.strip())<2 or len(data.property_name.strip())<2:raise HTTPException(422,'Enter name and property name.')
+    if os.getenv('STAYSYNC_ENV') == 'production' and data.legal_version != '2026-11-26-v1':
+        raise HTTPException(422, 'Review and accept the current privacy policy and terms before registering.')
     consume(s,phone,'register',data.code)
     t=Tenant(name=data.property_name.strip(),primary_color='#3B1E3F');s.add(t);s.flush()
     u=User(tenant_id=t.id,name=data.name.strip(),email=email,password_hash=passwords.hash(data.password),role='owner',room='');s.add(u)
     try:s.flush()
     except IntegrityError:s.rollback();raise HTTPException(409,'Account already exists.')
-    bind(s,u,phone);commit(s);return {'id':u.id,'message':'Owner account created. Sign in to continue.'}
+    bind(s,u,phone)
+    if data.legal_version == '2026-11-26-v1':
+        put(s,u.tenant_id,'legal_acceptance',u.id,{'version':data.legal_version,'accepted_at':time.time()})
+    commit(s);return {'id':u.id,'message':'Owner account created. Sign in to continue.'}
 
 @router.post('/forgot-password')
 def forgot_phone(data:PhoneIn,request:Request,s:Session=Depends(db)):

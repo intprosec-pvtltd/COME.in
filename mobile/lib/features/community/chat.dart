@@ -149,7 +149,7 @@ class ChatPage extends StatefulWidget {
       // Never post into an older owner-wide community endpoint.
       final capability=await app!.api.request('/v3/community-capabilities');
       if(capability is! Map || capability['property_scoped']!=true){
-        throw Exception('Server does not support PG-private messaging. Update backend first.');
+        throw Exception('Community messaging is temporarily unavailable.');
       }
       await app!.api.request('/v3/messages${editing==null?'':'/$editing'}',
       method:editing==null?'POST':'PATCH',
@@ -187,7 +187,7 @@ class ChatPage extends StatefulWidget {
     try{
       final capability=await app!.api.request('/v3/community-capabilities');
       if(capability is! Map || capability['property_scoped']!=true){
-        throw Exception('Server does not support private PG attachments. Update backend first.');
+        throw Exception('Community attachments are temporarily unavailable.');
       }
       await app!.api.upload('/community/attachments?property_id=$targetProperty',
       name,

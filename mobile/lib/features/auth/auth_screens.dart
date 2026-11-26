@@ -5,6 +5,7 @@ import '../../app/controller.dart';
 import '../../core/design.dart';
 import '../../core/app_theme.dart';
 import 'phone_verification.dart';
+import '../account/legal_content.dart';
 import '../../core/email_validation.dart';
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -267,7 +268,7 @@ class SignInScreen extends StatefulWidget {
       final phone = normalizeMobile(controls['phone']!.text)!;
       final data = <String,dynamic>{
         for(final key in ['name','email','property_name']) key:controls[key]!.text.trim(),
-        'phone':phone, 'password':controls['password']!.text, 'role':role,
+        'phone':phone, 'password':controls['password']!.text, 'role':role, 'legal_version':policyVersion,
       };
       Future<void> send() async {
         await api.request('/v3/phone/register/request',method:'POST',body:{'phone':phone});
@@ -334,6 +335,10 @@ class SignInScreen extends StatefulWidget {
           textAlign:TextAlign.center,style:const TextStyle(fontSize:12,color:Color(0xFF806C86)))),
       // The checkbox label expands across the screen; it never goes under the
       // Android navigation area because _AuthScaffold scrolls with safe insets.
+      TextButton(
+        onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const LegalDocument())),
+        child:const Text('Read privacy policy and terms'),
+      ),
       CheckboxListTile(contentPadding:EdgeInsets.zero,controlAffinity:ListTileControlAffinity.leading,
         activeColor:plum,value:terms,onChanged:(v)=>setState(()=>terms=v??false),
         title:Text(tr(context,'I agree to the Terms & Conditions and privacy policy'),

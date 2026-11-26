@@ -195,7 +195,7 @@ Widget propertySelector(BuildContext context){
         Row(children:[
           Icon(Icons.apartment_rounded,size:19,color:Theme.of(context).colorScheme.primary),
           const SizedBox(width:5),
-          Expanded(child:Text('PG: ${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'}',
+          Expanded(child:Text('${app.find('properties',(r['property_id'] as num?)?.toInt()??0)?['name']??'Primary PG'}',
             style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:14,fontWeight:FontWeight.w700))),
         ]),
         const SizedBox(height:13),
@@ -397,7 +397,75 @@ Widget propertySelector(BuildContext context){
       ]))
     ]);
   }
-} class ResidentsPage extends StatefulWidget {
+}
+Future<bool> _deleteResident(BuildContext context, AppController app,
+    Map<String, dynamic> resident) async {
+  final path = "/v3/residents/${resident['id']}";
+  final email = "${resident['email'] ?? ''}".trim();
+  if (email.isEmpty) {
+    feedback(context, 'This resident has no email address to confirm.');
+    return false;
+  }
+  try {
+    final review = await app.api.request('$path/deletion-review');
+    if (!context.mounted) return false;
+    if (review is! Map || review['eligible'] != true) {
+      feedback(context, 'Linked records prevent this resident from being deleted.');
+      return false;
+    }
+
+    var entered = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Permanently delete resident?'),
+          scrollable: true,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("${resident['name']} will lose access. This action cannot be undone."),
+              const SizedBox(height: 12),
+              Text('Type $email to confirm.'),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Resident email'),
+                autocorrect: false,
+                enableSuggestions: false,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (value) => setDialogState(() => entered = value.trim()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: entered.toLowerCase() == email.toLowerCase()
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              child: const Text('Delete permanently'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return false;
+    await app.api.request(path, method: 'DELETE', body: {'confirm_email': entered});
+  } catch (error) {
+    if (context.mounted) feedback(context, 'Unable to delete resident: $error');
+    return false;
+  }
+
+  try {
+    await app.refresh();
+    if (context.mounted) feedback(context, 'Resident deleted.');
+  } catch (_) {
+    if (context.mounted) feedback(context, 'Resident deleted. Refresh the list to see the change.');
+  }
+  return true;
+}
+
+class ResidentsPage extends StatefulWidget {
   const ResidentsPage({
     super.key
   });
@@ -426,7 +494,7 @@ Widget propertySelector(BuildContext context){
           Row(children:[
             Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:19),
             const SizedBox(width:6),
-            Expanded(child:Text('PG: ${app.find('properties', int.tryParse('${r['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
+            Expanded(child:Text('${app.find('properties', int.tryParse('${r['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
               maxLines:2,overflow:TextOverflow.ellipsis,
               style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:15,fontWeight:FontWeight.w700))),
           ]),
@@ -434,7 +502,16 @@ Widget propertySelector(BuildContext context){
           Text('Room ${r['room']??'—'} · Bed ${r['bed']??'—'}',
             style:TextStyle(color:secondaryText(context),fontSize:13)),
         ])),
-        Icon(Icons.chevron_right_rounded,color:Theme.of(context).colorScheme.primary),
+        if (app.profile['role'] == 'owner')
+          PopupMenuButton<String>(
+            tooltip: 'Actions for ${r['name']}',
+            onSelected: (_) => _deleteResident(context, app, r),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'delete', child: Text('Delete resident permanently')),
+            ],
+          )
+        else
+          Icon(Icons.chevron_right_rounded,color:Theme.of(context).colorScheme.primary),
       ])),
       if(residents.isEmpty)const EmptyState('No matching residents.'),
       Padding(padding:const EdgeInsets.symmetric(vertical:10),child:FilledButton.icon(
@@ -462,27 +539,23 @@ Widget propertySelector(BuildContext context){
     return PageBody(title:'${r['name']}',
     subtitle:'Room ${r['room']} · Bed ${r['bed']??'—'} · Monthly rent ${inr(r['monthly_rent']??'0')}',
     children:[
-      DisplayPhotoWidget(kind:'user', id:id, revision:(r['photo_revision'] as num?)?.toInt()??0, size:100),
-      HeroCard(label:'Outstanding rent',
-      value:inr(inv.fold<double>(0,
-      (s,
-      i)=>s+amount(i[
-        'outstanding'
-      ])))),
-      Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-      children:[
-        Text('${r['email']}'),
-        const SizedBox(height:8),
-        Text('Phone · ${r['phone']??'—'}'),
-        const SizedBox(height:8),
+      Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Row(children:[
+          DisplayPhotoWidget(kind:'user',id:id,revision:(r['photo_revision'] as num?)?.toInt()??0,size:64),
+          const SizedBox(width:14),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('${r['name']}',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800)),
+            Text('${r['email']}',style:TextStyle(color:secondaryText(context))),
+            if('${r['phone']??''}'.isNotEmpty) Text('${r['phone']}'),
+          ])),
+        ]),
+        const Divider(height:28),
         Text('Monthly rent · ${inr(r['monthly_rent']??'0')}',style:const TextStyle(fontWeight:FontWeight.w700)),
-        const SizedBox(height:15),
-        FilledButton(onPressed:()=>editEntity(context,
-        'resident',
-        id:id,
-        initial:r),
-        child:const Text('Edit resident'))
+        const SizedBox(height:12),
+        FilledButton.icon(onPressed:()=>editEntity(context,'resident',id:id,initial:r),
+          icon:const Icon(Icons.manage_accounts_outlined),label:const Text('Edit resident')),
       ])),
+      HeroCard(label:'Outstanding rent',value:inr(inv.fold<double>(0,(total,invoice)=>total+amount(invoice['outstanding'])))),
       if(app.owner) FeatureTile(
         title:'Review identity proof',
         subtitle:'View documents uploaded by this resident and approve or reject',
@@ -497,46 +570,13 @@ Widget propertySelector(BuildContext context){
             if(context.mounted)await showResidentCredentials(context,Map<String,dynamic>.from(data as Map));
           }catch(e){if(context.mounted)feedback(context,'$e');}
         }),
-      if(app.profile['role']=='owner')OutlinedButton.icon(
-        onPressed:()async{
-          final active=r['is_active']!=false;
-          if(!await ask(context,active
-            ?'Deactivate this resident account? Sign-in access will be removed; rent and document history remains.'
-            :'Reactivate this resident account?')||!context.mounted)return;
-          try{await app.mutate('/v3/residents/$id/access',method:'PATCH',body:{'active':!active});
-            if(context.mounted){feedback(context,active?'Resident deactivated':'Resident reactivated');Navigator.pop(context);}}
-          catch(e){if(context.mounted)feedback(context,'$e');}
-        },icon:Icon(r['is_active']==false?Icons.person_add_alt_1_outlined:Icons.person_off_outlined),
-          label:Text(r['is_active']==false?'Reactivate resident':'Deactivate resident')),
-      if(app.profile['role']=='owner' && r['is_active']==false)
+      if(app.profile['role']=='owner')
         OutlinedButton.icon(
           icon:const Icon(Icons.delete_forever_outlined),
-          label:const Text('Delete permanently (eligible accounts only)'),
-          onPressed:()async{
-            final email='${r['email'] ?? ''}';
-            try {
-              final review=Map<String,dynamic>.from(await app.api.request('/v3/residents/$id/deletion-review') as Map);
-              if(review['eligible']!=true){
-                if(context.mounted)feedback(context,'This resident has linked financial, document or activity records. Keep the account deactivated.');
-                return;
-              }
-              if(!context.mounted)return;
-              final field=TextEditingController();
-              final entered=await showDialog<String>(context:context,builder:(dialogContext)=>AlertDialog(
-                title:const Text('Permanently delete resident?'),
-                content:Column(mainAxisSize:MainAxisSize.min,children:[
-                  const Text('This cannot be undone. Type the exact resident email to confirm:'),
-                  const SizedBox(height:10),Text(email,style:const TextStyle(fontWeight:FontWeight.w700)),
-                  TextField(controller:field,autocorrect:false,keyboardType:TextInputType.emailAddress),
-                ]),
-                actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
-                  TextButton(onPressed:()=>Navigator.pop(dialogContext,field.text.trim()),child:const Text('Delete permanently'))],
-              ));
-              field.dispose();
-              if(entered!=email || !context.mounted)return;
-              await app.mutate('/v3/residents/$id',method:'DELETE',body:{'confirm_email':entered});
-              if(context.mounted){feedback(context,'Resident deleted');Navigator.pop(context);}
-            } catch(e){if(context.mounted)feedback(context,'Deletion not permitted: $e');}
+          label:const Text('Delete resident permanently'),
+          onPressed: () async {
+            final deleted = await _deleteResident(context, app, r);
+            if (deleted && context.mounted) Navigator.pop(context);
           },
         ),
       const SectionTitle('Invoices'),
@@ -577,7 +617,7 @@ Widget propertySelector(BuildContext context){
             Row(children:[
               Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:19),
               const SizedBox(width:6),
-              Expanded(child:Text('PG: ${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
+              Expanded(child:Text('${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
                 maxLines:2,overflow:TextOverflow.ellipsis,
                 style:TextStyle(fontSize:15,color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w700))),
             ]),
@@ -612,7 +652,7 @@ Widget propertySelector(BuildContext context){
       Surface(child:Row(children:[
         Icon(Icons.apartment_rounded,color:Theme.of(context).colorScheme.primary,size:23),
         const SizedBox(width:10),
-        Expanded(child:Text('PG: ${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
+        Expanded(child:Text('${app.find('properties',int.tryParse('${s['property_id']}')??-1)?['name'] ?? 'Not assigned'}',
           style:TextStyle(color:Theme.of(context).colorScheme.primary,fontSize:16,fontWeight:FontWeight.w700))),
       ])),
       Surface(child:Column(crossAxisAlignment:CrossAxisAlignment.start,

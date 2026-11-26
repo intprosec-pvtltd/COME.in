@@ -127,14 +127,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
           .download('/identity/proofs/${proof['id']}/file');
       if (!mounted) return;
       if ('${proof['mime']}'.startsWith('image/')) {
-        await showDialog<void>(context: context, builder: (ctx) => Dialog(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Flexible(child: InteractiveViewer(
-              child: Image.memory(Uint8List.fromList(bytes), fit: BoxFit.contain))),
-            TextButton(onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close')),
-          ]),
-        ));
+        await _previewImage(bytes, 'Identity document');
       } else {
         final allow = await showDialog<bool>(context: context,
           builder: (ctx) => AlertDialog(
@@ -225,33 +218,6 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     );
   }
 
-  Widget _riskCard(Map<String, dynamic> proof) {
-    final flags=(proof['risk_flags'] as List? ?? []).map((e)=>'$e').toList();
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color:const Color(0xFFFFF4E5),
-        borderRadius:BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('Document review information — authenticity not independently verified',
-          style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF815418))),
-        const SizedBox(height:5),
-        Text(flags.isEmpty ? tr(context,'No flags found') : flags.join(' • '),
-          style:const TextStyle(fontSize:12)),
-        const SizedBox(height:5),
-        Text(tr(context,'Not a government verification'),
-          style:const TextStyle(fontSize:11)),
-        const SizedBox(height: 5),
-        Text('PDF metadata alone cannot establish whether a document is genuine or modified.',
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-        if ((proof['review_notes'] as List? ?? []).isNotEmpty) ...[
-          const SizedBox(height: 5),
-          Text((proof['review_notes'] as List).join(' • '),
-            style: const TextStyle(fontSize: 11)),
-        ],
-      ]),
-    );
-  }
-
   Widget _proofCard(Map<String, dynamic> proof, {required bool current}) {
     final note = '${proof['review_note'] ?? ''}'.trim();
     final status = '${proof['status']}';
@@ -270,7 +236,7 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
         _status(proof),
         if (ownerView) ...[
           const SizedBox(height: 9),
-          _riskCard(proof),
+          const Text('Manual PG owner review.', style: TextStyle(fontSize:12)),
         ],
         if (note.isNotEmpty) Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -332,17 +298,41 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     }finally{if(mounted)setState(()=>portraitLoading=false);}
   }
 
+  Future<void> _previewImage(Uint8List bytes, String title) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 420,
+          height: MediaQuery.sizeOf(dialogContext).height * .68,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 4),
+              child: Row(children: [
+                Expanded(child: Text(title, style: Theme.of(dialogContext).textTheme.titleMedium)),
+                IconButton(
+                  tooltip: 'Close preview',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ]),
+            ),
+            Expanded(child: InteractiveViewer(
+              child: Center(child: Image.memory(bytes, fit: BoxFit.contain)),
+            )),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> viewPortrait() async {
     if(portrait==null)return;
     try{
       final bytes=await AppScope.of(context).api.download('/identity/portrait/${portrait!['id']}/file');
       if(!mounted)return;
-      await showDialog<void>(context:context,builder:(ctx)=>Dialog(child:Column(
-        mainAxisSize:MainAxisSize.min,children:[
-          Align(alignment:Alignment.topRight,child:IconButton(
-            tooltip:'Close photograph',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(ctx))),
-          Flexible(child:InteractiveViewer(child:Image.memory(Uint8List.fromList(bytes),fit:BoxFit.contain))),
-        ])));
+      await _previewImage(bytes, 'Resident photograph');
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Cannot open photograph.')));}
   }
 
@@ -372,9 +362,9 @@ class _IdentityProofPageState extends State<IdentityProofPage> {
     if(!ownerView&&(portrait==null||portrait!['status']=='rejected'||portrait!['status']=='approved'))
       FilledButton.icon(onPressed:portraitLoading?null:uploadPortrait,
         icon:const Icon(Icons.add_a_photo_outlined),label:Text(portraitLoading?'Uploading…':portrait==null?'Upload photograph':'Change photograph')),
-    if(ownerView&&portrait?['status']=='pending')Row(children:[
-      TextButton(onPressed:()=>reviewPortrait('approved'),child:const Text('Approve photo')),
-      TextButton(onPressed:()=>reviewPortrait('rejected'),child:const Text('Request replacement')),
+    if(ownerView&&portrait?['status']=='pending')Wrap(spacing:8,runSpacing:6,children:[
+      FilledButton(onPressed:()=>reviewPortrait('approved'),child:const Text('Approve photo')),
+      OutlinedButton(onPressed:()=>reviewPortrait('rejected'),child:const Text('Request replacement')),
     ]),
   ]));
 
