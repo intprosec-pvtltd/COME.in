@@ -276,7 +276,7 @@ class SignInScreen extends StatefulWidget {
       await send();
       if (!mounted) return;
       final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => PhoneCodePage(
-        phone:phone, resend:send, verify:(code) async {
+        phone:phone, resend:send, registration:true, verify:(code) async {
           await api.request('/v3/phone/register',method:'POST',body:{...data,'code':code});
           return 'verified';
         })));
