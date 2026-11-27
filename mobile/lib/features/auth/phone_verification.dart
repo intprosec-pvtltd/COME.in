@@ -42,8 +42,9 @@ InputDecoration mobileDecoration(BuildContext context, String raw, {bool label =
 /// and limits; the client countdown is solely a user-interface convenience.
 class PhoneCodePage extends StatefulWidget {
   const PhoneCodePage({super.key, required this.phone, required this.resend,
-    required this.verify});
+    required this.verify, this.registration = false});
   final String phone;
+  final bool registration;
   final Future<void> Function() resend;
   final Future<String> Function(String code) verify;
   @override
@@ -100,6 +101,12 @@ class _PhoneCodePageState extends State<PhoneCodePage> {
       FilledButton(onPressed: busy ? null : confirm, child: Text(busy ? 'Please wait…' : 'Verify code')),
       TextButton(onPressed: busy || seconds > 0 ? null : sendAgain,
         child: Text(seconds > 0 ? 'Resend code in ${seconds}s' : 'Resend code')),
+      if (widget.registration) ...[
+        const SizedBox(height: 8),
+        const Text('No SMS? Check your mobile number and signal. If you already have an account, sign in or use Forgot Password. Otherwise, retry after the countdown or contact support.', textAlign: TextAlign.center),
+        TextButton(onPressed: busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Change mobile number')),
+      ],
     ])))]);
 }
 

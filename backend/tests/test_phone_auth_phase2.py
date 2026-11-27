@@ -146,3 +146,37 @@ def test_community_role_server_side_and_scope():
     msg=client.post('/api/v3/messages',headers=resident,json={'body':'Resident message','author_role':'owner'});assert msg.status_code==201,msg.text
     rows=client.get('/api/v3/messages?property_id=0',headers=owner).json();row=next(x for x in rows if x['id']==msg.json()['id'])
     assert row['author_role']=='resident' and row['author_room']=='204'
+
+
+def test_registration_delivery_failure_is_nonactionable(transport, monkeypatch, caplog):
+    from fastapi import HTTPException
+    phone = '9876500011'
+    def reject(*args):
+        raise HTTPException(503, 'SMS could not be sent.')
+    monkeypatch.setattr(pa, 'send_sms', reject)
+    response = req('/register/request', {'phone': phone})
+    assert response['ok'] and response['expires_in'] == 300
+    with SessionLocal() as s:
+        challenge = s.get(pa.PhoneChallenge, pa.challenge_key('+91' + phone, 'register'))
+        assert challenge.consumed == 1
+    assert 'delivery failed purpose=register' in caplog.text
+    assert phone not in caplog.text
+    req('/register', {'phone': phone, 'code': '123456', 'name': 'QA Owner',
+                      'email': 'failed-registration@example.test', 'property_name': 'QA PG',
+                      'password': 'SyntheticTest123!'}, 400)
+
+
+def test_bound_number_registration_is_nonactionable(transport):
+    phone = '9876500012'
+    create_verified(phone, transport)
+    transport.clear()
+    with SessionLocal() as s:
+        challenge = s.get(pa.PhoneChallenge, pa.challenge_key('+91' + phone, 'register'))
+        challenge.issued = time.time() - 31
+        s.commit()
+    response = req('/register/request', {'phone': phone})
+    assert response['ok'] and '+91'+phone not in transport
+    with SessionLocal() as s:
+        assert s.get(pa.PhoneChallenge, pa.challenge_key('+91'+phone, 'register')).consumed == 1
+    req('/forgot-password', {'phone': phone})
+    assert '+91'+phone in transport

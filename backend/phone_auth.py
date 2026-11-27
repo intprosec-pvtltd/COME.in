@@ -1,7 +1,6 @@
 """Verified mobile authentication, additive schema, no automatic trust of profile phones."""
-import base64, hashlib, hmac, os, re, secrets, time
-from urllib.parse import urlencode
-from urllib.request import Request as HTTPRequest, urlopen
+import hashlib, hmac, logging, os, re, secrets, time
+from sms_transport import SmsDeliveryError, submit_sms
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import ForeignKey, String, Float, Integer, select, update, delete
@@ -70,15 +69,16 @@ def sms_config():
 
 def send_sms(phone, code):
     sid, token, sender, service = sms_config()
-    fields = {'To': phone, 'Body': f'Stay Sync verification code: {code}. Valid for 5 minutes. Do not share this code.'}
-    fields['MessagingServiceSid' if service else 'From'] = service or sender
-    req = HTTPRequest(f'https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json',
-                      data=urlencode(fields).encode(), headers={'Authorization': 'Basic '+base64.b64encode(f'{sid}:{token}'.encode()).decode(), 'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
     try:
-        with urlopen(req, timeout=15) as response:
-            if not 200 <= response.status < 300: raise RuntimeError('SMS rejected')
-    except Exception:
+        status = submit_sms(sid, token, sender, service, phone, code)
+    except SmsDeliveryError as exc:
+        # Only allowlisted metadata; never log phone, OTP, credentials or raw provider text.
+        logging.getLogger(__name__).warning(
+            'SMS provider rejected request category=%s http_status=%s provider_code=%s',
+            exc.category, exc.http_status, exc.provider_code)
         raise HTTPException(503, 'SMS could not be sent. Try again later.') from None
+    logging.getLogger('uvicorn.error.staysync.phone_auth').info('SMS provider accepted request status=%s', status)
+
 
 def limit(s, key, maximum, window):
     key = digest('rate:'+key); now = time.time()
@@ -127,10 +127,12 @@ def issue(s, request, phone, purpose, subject='', deliver=True):
         try: send_sms(phone,code)
         except HTTPException:
             s.execute(update(PhoneChallenge).where(PhoneChallenge.key==key,PhoneChallenge.nonce==nonce).values(consumed=1));s.commit()
-            import logging
-            logging.getLogger(__name__).warning('SMS verification delivery failed')
+            logging.getLogger(__name__).warning('SMS verification delivery failed purpose=%s', purpose)
+        else:
+            logging.getLogger('uvicorn.error.staysync.phone_auth').info('SMS verification request accepted purpose=%s', purpose)
     else:
-        # Unknown account: same response and cooldown, never an actionable challenge.
+        # Ineligible account: same response and cooldown, never an actionable challenge.
+        logging.getLogger('uvicorn.error.staysync.phone_auth').info('SMS verification skipped purpose=%s reason=ineligible', purpose)
         s.execute(update(PhoneChallenge).where(PhoneChallenge.key==key,PhoneChallenge.nonce==nonce).values(consumed=1));s.commit()
     return {'ok':True,'message':'If eligible, a verification code will be sent.','resend_after':30,'expires_in':300}
 
